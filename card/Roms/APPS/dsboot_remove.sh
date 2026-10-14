@@ -17,7 +17,7 @@ remove() {
 		cp -p "$state/stock/fstab" /etc/fstab.stock && mv /etc/fstab.stock /etc/fstab || return 1
 	fi
 	rm -f /.skip_fsck /etc/profile.d/dsboot.sh
-	rm -f "$state/enabled" "$state/booting" "$state/last" "$state/trace" "$state/trace.sh"
+	rm -f "$state/enabled" "$state/booting" "$state/last" "$state/trace" "$state/trace.sh" "$state/readahead" "$state/learn" "$state"/readahead.*
 	rm -f "$state/stock/rcS" "$state/stock/loadapp.sh" "$state/stock/fstab"
 	rmdir "$state/stock" "$state"
 	echo "removed"

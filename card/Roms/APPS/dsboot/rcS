@@ -68,11 +68,39 @@ if [ -f "$state/booting" ]; then
 fi
 : > "$state/booting" || stock
 load "rcS started, fast order"
+# Reading ahead: the card is the slow part of starting, and sits half idle while udev works.
+# On the first start after an install nothing is read ahead; instead, what has been read from
+# the card is written down at three moments (see learn below). Every start after that reads
+# those three lists back in, in order, from here on.
+under="/usr /etc /mnt/vendor/bin /mnt/vendor/ctrl /mnt/vendor/sbin /mnt/vendor/resource"
+learning=
+if [ -x "$state/readahead" ]; then
+	if [ -f "$state/learn" ]; then
+		rm -f "$state/learn" "$state/readahead.1" "$state/readahead.2" "$state/readahead.3"
+		learning=1
+	elif [ -f "$state/readahead.1" ]; then
+		(
+			"$state/readahead" play "$state/readahead.1" "$state/readahead.2" "$state/readahead.3"
+			note "read ahead finished"
+		) &
+	fi
+fi
+
+# learn N [NAME...]: on a learning start, list what is in memory now, the files of the
+# programs called NAME first.
+learn() {
+	[ -n "$learning" ] || return
+	list="$state/readahead.$1"
+	shift
+	note "$("$state/readahead" record "$list" --first "$@" --under $under 2>&1)"
+}
 # With /etc/dsboot/trace there, more is written down: see the launch below, and Weston
 # reports how long the dynamic loader took to start it.
 trace=
 if [ -f "$state/trace" ] && [ -f "$state/trace.sh" ]; then
 	trace=1
+	read -r scheduler < /sys/block/mmcblk1/queue/scheduler
+	note "card scheduler: $scheduler"
 fi
 
 first="S00mountall.sh S01log-guardian.sh S01seedrng S01syslogd S02klogd S02sysctl S05async-commit.sh S10udev S30dbus S49weston"
@@ -83,6 +111,7 @@ radio="S36wifibt-init.sh S40bluetoothd S45network-manager"
 for s in $first; do
 	if [ $s = S49weston ]; then
 		load "before the screen"
+		learn 1 udevd dbus-daemon
 		[ -z "$trace" ] || export LD_DEBUG=statistics
 	fi
 	run "$d/$s"
@@ -105,6 +134,7 @@ while [ ! -S /var/run/wayland-0 ] && [ $n -lt 60 ]; do
 	n=$((n + 1))
 done
 load "screen up"
+learn 2 weston pulseaudio NetworkManager bluetoothd
 # When tracing, the launch script and autostart log each command they run.
 [ -z "$trace" ] || export BASH_ENV="$state/trace.sh"
 run "$d/S60launch"
@@ -116,6 +146,11 @@ unset BASH_ENV
 		if [ -S /var/run/wayland-0 ] && pgrep -f 'dmenu_ln|update/update\.sh' > /dev/null; then
 			rm -f "$state/booting"
 			echo "fast boot reached the menu at $(cut -d' ' -f1 /proc/uptime) s" > "$state/last"
+			# Give the menu, or what the card's hook starts, time to come up.
+			if [ -n "$learning" ]; then
+				sleep 6
+				learn 3 weston
+			fi
 			break
 		fi
 		sleep 1

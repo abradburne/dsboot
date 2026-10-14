@@ -8,8 +8,8 @@ system in place, keeps what it replaces, and can be undone. No image to flash.
 Written for a device that starts its OS from the SD card, where a bad result can be fixed by
 reflashing the card. Tried on one such device, which starts dslot at power-on: the vendor
 launch script started at 12.4 s instead of 14.5 s, and the first picture came up at 18.3 s
-instead of 21.1 s. Changes to dslot's own start-up brought that to 16.8 s, and the gzipped
-kernel below to 14.9 s.
+instead of 21.1 s. Changes to dslot's own start-up brought that to 16.8 s, the gzipped
+kernel below to 14.9 s, and the later changes listed here to 13.7 s.
 
 ## Where a stock start goes
 
@@ -41,6 +41,12 @@ If it does not restart, nothing was changed; `Roms/APPS/dsboot/install.log` says
 - `/.skip_fsck` is created, the stock switch for skipping the disk check at every start.
 - `/etc/fstab` names the four system partitions by device instead of by label, which init
   spends over half a second looking up.
+
+- A small program, `/etc/dsboot/readahead`, starts reading the files the screen, sound and
+  radios will ask for while the card is otherwise idle. The first start after installing
+  reads nothing ahead and is a little slower: it notes what it has read from the card at
+  three moments, and later starts read those lists back in that order, at idle priority so
+  that nothing else waits for the card behind it. Worth about 0.6 s.
 
 The stock `rcS`, `loadapp.sh` and `fstab` are kept in `/etc/dsboot/stock`.
 
@@ -83,15 +89,15 @@ tools/mkcard.sh
 
 - **dsboot_boot_logo** writes the new pictures and restarts.
 - **dsboot_boot_fast** writes the new pictures with the gzipped kernel and restarts.
-- **dsboot_boot_sdfast** is dsboot_boot_fast with the OS card's slot allowed to clock at
-  150 MHz instead of 50 MHz. Starting up is held back by how fast the card can be read, and
-  50 MHz holds any card to about 20 MB/s. Not yet tried on a device: a card or board that
-  cannot keep up may fail to start, or start and misread.
 - **dsboot_boot_stock** puts back the stock partition, which is kept from the device the first
   time one of the others runs.
 
 Each refuses unless the OS is running from the SD card and the partition holds an image it
 knows, and reads back what it wrote. `Roms/APPS/dsboot/boot.log` says what happened.
+
+Starting up is held back by how fast the card can be read, and the OS card's slot is clocked
+at 50 MHz, about 20 MB/s whatever the card. `bootimg.py --sd-clock` can raise that, but at
+150 MHz the kernel finds no working tuning and falls back to 50, so it gains nothing here.
 
 **If the device no longer starts** after one of these, put the card in the Mac and run
 `tools/restore-boot.sh`. It writes the stock boot partition back and asks for your password.

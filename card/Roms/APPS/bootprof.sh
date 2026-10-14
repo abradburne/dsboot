@@ -73,5 +73,6 @@ touched() {
 	echo "== /tmp"; ls -la --full-time /tmp 2>&1 || ls -la /tmp
 	echo "== /var/run"; ls -la --full-time /var/run/ 2>&1 || ls -la /var/run/
 	echo "== init.d"; ls -la /etc/init.d
+	echo "== dsboot"; ls -la /etc/dsboot; wc -l /etc/dsboot/readahead.[123]
 } > "$out/state.txt" 2>&1
 sync

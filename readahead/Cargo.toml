@@ -1,0 +1,15 @@
+[package]
+name = "dsboot-readahead"
+version = "0.1.0"
+edition = "2021"
+description = "Reads the files a start-up needs ahead of the programs that need them."
+license = "GPL-3.0-or-later"
+
+[dependencies]
+libc = "0.2"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
+panic = "abort"

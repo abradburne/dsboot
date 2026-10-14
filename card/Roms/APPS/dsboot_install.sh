@@ -85,6 +85,21 @@ install() {
 		echo "fstab: left alone"
 	fi
 
+	# Reading ahead. The next start reads nothing ahead and instead notes what it reads from
+	# the card; the starts after that use those notes. See rcS.
+	rm -f "$state/readahead.list"
+	if [ -f "$src/readahead" ]; then
+		cp "$src/readahead" "$state/readahead.new" && chmod 755 "$state/readahead.new" &&
+			mv "$state/readahead.new" "$state/readahead" || return 1
+		# Lists from an earlier learning start are kept. Delete /etc/dsboot/readahead.1 to learn again.
+		if [ -f "$state/readahead.1" ]; then
+			echo "readahead: lists kept"
+		else
+			: > "$state/learn"
+			echo "readahead: the next start learns what to read"
+		fi
+	fi
+
 	# Tracing of the vendor launch script: on while a file called trace sits beside rcS on the card.
 	cp "$src/trace.sh" "$state/trace.sh"
 	if [ -f "$src/trace" ]; then
