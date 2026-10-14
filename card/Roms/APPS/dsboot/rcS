@@ -78,7 +78,7 @@ load "rcS started, fast order"
 # works. On the first start after an install nothing is read ahead; instead, what has been
 # read from the card is written down at three moments (see learn below). Every start after
 # that reads those three lists back in, in order.
-under="/usr /etc /mnt/vendor/bin /mnt/vendor/ctrl /mnt/vendor/sbin /mnt/vendor/resource"
+under="/usr /etc /mnt/vendor/bin /mnt/vendor/ctrl /mnt/vendor/sbin /mnt/vendor/resource /mnt/mmc/Roms/APPS /mnt/mmc/update"
 covered=/run/dsboot-hot.done
 learning=
 if [ -x "$state/readahead" ]; then
@@ -140,15 +140,28 @@ for s in $first; do
 	run "$d/$s"
 	unset LD_DEBUG
 done
-(
-	for s in $radio; do
-		run "$d/$s"
-	done
-) &
-radio_pid=$!
+# An app on the OS card can ask to be started as soon as the screen is up, without waiting
+# for the vendor launch script: update/early.sh, beside the update.sh that script runs. With
+# one there, the radios can wait until it is on its way. The card is not mounted yet, so this
+# goes by what the last start found. The launch script then has to wait for the radios before
+# it switches them off (see radios-wait), which is only worth it when it is not what brings
+# up the first thing on screen.
+early=/mnt/mmc/update/early.sh
+later=
+if [ -f "$state/early" ] && [ -x "$state/radios-wait" ]; then
+	later=1
+	: > /run/dsboot-radios.later
+else
+	(
+		for s in $radio; do
+			run "$d/$s"
+		done
+	) &
+	radio_pid=$!
+fi
 run "$d/S50pulseaudio"
-wait $radio_pid
-load "radios and sound up"
+[ -n "$later" ] || wait $radio_pid
+load "sound up${later:+, radios to come}"
 # The vendor launch script looks for Weston's socket every half second. Waiting for it here,
 # in small steps, means it is found at the first look.
 n=0
@@ -162,6 +175,29 @@ learn 2 weston pulseaudio NetworkManager bluetoothd
 [ -z "$trace" ] || export BASH_ENV="$state/trace.sh"
 run "$d/S60launch"
 unset BASH_ENV
+if [ -f "$early" ]; then
+	# The app may say when its first picture is up, by creating this file.
+	DSBOOT_SHOWN=/run/dsboot-early.shown bash "$early" > /dev/null 2>&1 &
+	note "early app started"
+	[ -f "$state/early" ] || : > "$state/early"
+elif [ -f "$state/early" ]; then
+	rm -f "$state/early"
+fi
+if [ -n "$later" ]; then
+	# Starting the radios takes the card for a second or more. Wait until the early app has
+	# its first picture up, or five seconds.
+	n=0
+	while [ -f "$early" ] && [ ! -e /run/dsboot-early.shown ] && [ $n -lt 100 ]; do
+		sleep 0.05
+		n=$((n + 1))
+	done
+	note "early app's first picture up"
+	for s in $radio; do
+		run "$d/$s"
+	done
+	: > /run/dsboot-radios.up
+	load "radios up"
+fi
 
 (
 	n=0

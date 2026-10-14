@@ -52,7 +52,7 @@ processes() {
 	processes
 } > "$out/report.txt" 2>&1
 
-for f in /var/log/messages /var/log/mount-all.log /var/log/weston.log /tmp/dsboot.log /tmp/loadapp.trace; do
+for f in /var/log/messages /var/log/mount-all.log /var/log/weston.log /tmp/dsboot.log /tmp/loadapp.trace /etc/dsboot/readahead.[123] /etc/dsboot/hot.list; do
 	[ -f "$f" ] && cp "$f" "$out/"
 done
 # How much of each file a running program has actually pulled in from the card.

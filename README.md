@@ -9,7 +9,7 @@ Written for a device that starts its OS from the SD card, where a bad result can
 reflashing the card. Tried on one such device, which starts dslot at power-on: the vendor
 launch script started at 12.4 s instead of 14.5 s, and the first picture came up at 18.3 s
 instead of 21.1 s. Changes to dslot's own start-up brought that to 16.8 s, the gzipped
-kernel below to 14.9 s, and the later changes listed here to 12.9 s.
+kernel below to 14.9 s, and the later changes listed here to 11.5 s.
 
 ## Where a stock start goes
 
@@ -48,11 +48,17 @@ If it does not restart, nothing was changed; `Roms/APPS/dsboot/install.log` says
   three moments, and later starts read those lists back in that order, at idle priority so
   that nothing else waits for the card behind it. Worth about 0.6 s.
 
-- gzip-compressed copies of the largest libraries a start reads (the 54 MB graphics driver
-  above all) are kept in `/etc/dsboot/hot.sqsh` and mounted over the originals at each start,
+- gzip-compressed copies of the files a start reads the most of before the screen is up (the
+  graphics driver above all; the list is `tools/hot-files.txt`) are kept in `/etc/dsboot/hot.sqsh` and mounted over the originals at each start,
   so that less has to come off the card. Built on the Mac with `tools/mkhot.sh` from the stock
   firmware image; the installer only uses files identical to the device's own. Worth about
   0.8 s. The image holds the firmware's own libraries, so it is not something to pass on.
+
+- An app on the OS card can be started as soon as the screen is up, without waiting for the
+  vendor launch script: `update/early.sh`, beside the `update/update.sh` that script runs. dslot
+  installs one. When there is one, Wi-Fi and Bluetooth are started once the app has its first
+  picture up (it says so by creating the file named in `DSBOOT_SHOWN`), and the vendor launch
+  script waits for them before switching them off, as the stock menu expects.
 
 The stock `rcS`, `loadapp.sh` and `fstab` are kept in `/etc/dsboot/stock`.
 

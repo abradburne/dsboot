@@ -67,6 +67,8 @@ hot() {
 	done
 	umount /tmp/dsboot-hot
 	mv "$state/hot.new" "$state/hot.sqsh" && mv "$state/hot.list.new" "$state/hot.list"
+	# What a start reads from the card is different now: learn it again.
+	rm -f "$state/readahead.1" "$state/readahead.2" "$state/readahead.3"
 	echo "hot: $(grep -c . "$state/hot.list") files will come from compressed copies"
 }
 
@@ -103,6 +105,31 @@ install() {
 		sed -i 's/^sleep 1\.5$/sleep 0.2/' "$loadapp" && echo "loadapp.sh: wait shortened"
 	else
 		echo "loadapp.sh: wait not found or already shortened; left alone"
+	fi
+
+	# See radios-wait and rcS: the launch script waits for the radios when they start late.
+	cp "$src/radios-wait" "$state/radios-wait" && chmod 755 "$state/radios-wait" || return 1
+	if grep -q radios-wait "$loadapp"; then
+		echo "loadapp.sh: already waits for the radios"
+	elif [ "$(grep -c '^nmcli networking off$' "$loadapp")" = 1 ]; then
+		awk '$0 == "nmcli networking off" { print "[ -x /etc/dsboot/radios-wait ] && /etc/dsboot/radios-wait" } { print }' \
+			"$state/stock/loadapp.sh" > "$state/loadapp.new" && sed -i 's/^sleep 1\.5$/sleep 0.2/' "$state/loadapp.new" &&
+			cat "$state/loadapp.new" > "$loadapp"
+		rm -f "$state/loadapp.new"
+		if [ "$(grep -c '^nmcli networking off$' "$loadapp")" = 1 ] && grep -q '^\[ -x /etc/dsboot/radios-wait \] && /etc/dsboot/radios-wait$' "$loadapp" && bash -n "$loadapp"; then
+			echo "loadapp.sh: waits for the radios"
+		else
+			echo "loadapp.sh: could not add the wait; putting the stock script back"
+			cp -p "$state/stock/loadapp.sh" "$loadapp"
+			rm -f "$state/radios-wait"
+		fi
+	else
+		echo "loadapp.sh: no place for the radios wait; left alone"
+		rm -f "$state/radios-wait"
+	fi
+	# An app that asks to start early is on the card now: let the next start know.
+	if [ -f /mnt/mmc/update/early.sh ]; then
+		: > "$state/early"
 	fi
 
 	# The stock switch for skipping the disk check at every start.

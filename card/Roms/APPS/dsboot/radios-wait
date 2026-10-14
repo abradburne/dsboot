@@ -1,0 +1,12 @@
+#!/bin/sh
+# dsboot: called by the vendor launch script just before it switches Wi-Fi and Bluetooth off.
+# On a start where rcS has left the radios until after the launch, this waits for them to be
+# up, so that switching them off still works and still comes before the menu switches them
+# on. On any other start it returns at once.
+
+[ -e /run/dsboot-radios.later ] || exit 0
+n=0
+while [ ! -e /run/dsboot-radios.up ] && [ $n -lt 200 ]; do
+	sleep 0.05
+	n=$((n + 1))
+done
