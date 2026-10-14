@@ -51,8 +51,8 @@ there, and on any other firmware.
 
 1. Download `dsboot-0.1.0-rgdsplus.zip` from the latest release and unzip it. Inside is a folder,
    `Roms`, holding one folder, `APPS`.
-2. Turn the DS+ off, take out the SD card it starts from and put it in your computer. It shows as
-   a drive called `ROMS`.
+2. Turn the DS+ off, take out the SD card in the slot marked **TF1/INT**, the one it starts from,
+   and put it in your computer. It shows as a drive called `ROMS`.
 3. Copy **everything inside the zip's `Roms/APPS` folder** into the card's `Roms/APPS` folder:
    the `dsboot` folder and five `dsboot_*.sh` files. Copy the contents, not the `Roms` folder.
 4. Put the card back and turn the DS+ on. In the stock menu open **Apps** and choose
