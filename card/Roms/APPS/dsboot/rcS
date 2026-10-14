@@ -1,0 +1,101 @@
+#!/bin/sh
+# dsboot: replaces /etc/init.d/rcS. The stock rcS is kept in /etc/dsboot/stock and is what
+# runs whenever the fast order is switched off or the last fast boot did not reach the menu.
+#
+# The stock order starts every service one after another and only then the screen and the
+# menu. This one runs the same scripts, but brings up the screen, sound and the menu first
+# and leaves the rest (SSH, time sync, mDNS, cron...) until the menu is already loading.
+
+state=/etc/dsboot
+d=/etc/init.d
+# Seconds since the kernel started its clock, beside each step, for bootprof to collect.
+log=/tmp/dsboot.log
+
+note() {
+	read -r t _ < /proc/uptime
+	echo "$t $*" >> "$log"
+}
+
+stock() {
+	[ -x "$state/stock/rcS" ] && exec "$state/stock/rcS"
+	# The kept copy is gone. Do what it does: every script, in order.
+	for i in "$d"/S??*; do
+		run "$i"
+	done
+	exit
+}
+
+# As the stock rcS runs them.
+run() {
+	f=$1
+	[ -f "$f" ] || return
+	case "$f" in
+		*.sh)
+			(
+				trap - INT QUIT TSTP
+				set start
+				. "$f"
+			)
+			;;
+		*)
+			"$f" start
+			;;
+	esac
+	note "done ${f##*/}"
+}
+
+[ -f "$state/enabled" ] || stock
+
+# "booting" is put down here and taken away once the menu (or the card's update hook) is
+# running. Finding it still there means the last fast boot never got that far: go back to
+# the stock order and stay there until dsboot_install is run again.
+if [ -f "$state/booting" ]; then
+	rm -f "$state/booting" "$state/enabled"
+	echo "fast boot did not reach the menu; stock order restored" > "$state/last"
+	stock
+fi
+: > "$state/booting" || stock
+note "rcS started, fast order"
+
+first="S00mountall.sh S01log-guardian.sh S01seedrng S01syslogd S02klogd S02sysctl S05async-commit.sh S10udev S30dbus S49weston"
+# The vendor launch script switches Wi-Fi and Bluetooth off through these, so they have to
+# be up before it runs. They start beside PulseAudio instead of ahead of it.
+radio="S36wifibt-init.sh S40bluetoothd S45network-manager"
+
+for s in $first; do
+	run "$d/$s"
+done
+(
+	for s in $radio; do
+		run "$d/$s"
+	done
+) &
+radio_pid=$!
+run "$d/S50pulseaudio"
+wait $radio_pid
+note "radios and sound up"
+run "$d/S60launch"
+
+(
+	n=0
+	while [ $n -lt 90 ]; do
+		if [ -S /var/run/wayland-0 ] && pgrep -f 'dmenu_ln|update/update\.sh' > /dev/null; then
+			rm -f "$state/booting"
+			echo "fast boot reached the menu at $(cut -d' ' -f1 /proc/uptime) s" > "$state/last"
+			break
+		fi
+		sleep 1
+		n=$((n + 1))
+	done
+	# A way out from a computer: a file called dsboot.off on the ROMS volume.
+	if [ -f /mnt/mmc/dsboot.off ]; then
+		rm -f "$state/enabled"
+	fi
+) &
+
+for i in "$d"/S??*; do
+	case " $first $radio S50pulseaudio S60launch " in
+		*" ${i##*/} "*) continue ;;
+	esac
+	run "$i"
+done

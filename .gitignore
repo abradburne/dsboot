@@ -1,0 +1,5 @@
+work/
+.DS_Store
+card/Roms/APPS/dsboot/boot-*.img
+card/Roms/APPS/dsboot/boot-images.txt
+__pycache__/
