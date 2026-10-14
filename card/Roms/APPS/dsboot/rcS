@@ -68,22 +68,39 @@ if [ -f "$state/booting" ]; then
 fi
 : > "$state/booting" || stock
 load "rcS started, fast order"
-# Reading ahead: the card is the slow part of starting, and sits half idle while udev works.
-# On the first start after an install nothing is read ahead; instead, what has been read from
-# the card is written down at three moments (see learn below). Every start after that reads
-# those three lists back in, in order, from here on.
+# Two things are set going here and carry on beside the scripts below.
+#
+# Compressed copies of the libraries a start reads the most of are mounted over the
+# originals: less comes off the card, and the processors, which mostly wait for it, do the
+# unpacking. A file is only covered while the original has the size and date it had at install.
+#
+# Then, reading ahead: the card is the slow part of starting, and sits half idle while udev
+# works. On the first start after an install nothing is read ahead; instead, what has been
+# read from the card is written down at three moments (see learn below). Every start after
+# that reads those three lists back in, in order.
 under="/usr /etc /mnt/vendor/bin /mnt/vendor/ctrl /mnt/vendor/sbin /mnt/vendor/resource"
+covered=/run/dsboot-hot.done
 learning=
 if [ -x "$state/readahead" ]; then
 	if [ -f "$state/learn" ]; then
 		rm -f "$state/learn" "$state/readahead.1" "$state/readahead.2" "$state/readahead.3"
 		learning=1
-	elif [ -f "$state/readahead.1" ]; then
-		(
+	fi
+	(
+		if [ -f "$state/hot.sqsh" ] && [ -f "$state/hot.list" ]; then
+			mkdir -p /run/dsboot-hot
+			mount -t squashfs -o loop,ro "$state/hot.sqsh" /run/dsboot-hot &&
+				"$state/readahead" cover /run/dsboot-hot "$state/hot.list"
+			note "compressed copies mounted"
+		fi
+		: > "$covered"
+		if [ -z "$learning" ] && [ -f "$state/readahead.1" ]; then
 			"$state/readahead" play "$state/readahead.1" "$state/readahead.2" "$state/readahead.3"
 			note "read ahead finished"
-		) &
-	fi
+		fi
+	) &
+else
+	: > "$covered"
 fi
 
 # learn N [NAME...]: on a learning start, list what is in memory now, the files of the
@@ -110,6 +127,12 @@ radio="S36wifibt-init.sh S40bluetoothd S45network-manager"
 
 for s in $first; do
 	if [ $s = S49weston ]; then
+		# Nothing before this uses the covered libraries; Weston is the first that does.
+		n=0
+		while [ ! -e "$covered" ] && [ $n -lt 100 ]; do
+			sleep 0.02
+			n=$((n + 1))
+		done
 		load "before the screen"
 		learn 1 udevd dbus-daemon
 		[ -z "$trace" ] || export LD_DEBUG=statistics

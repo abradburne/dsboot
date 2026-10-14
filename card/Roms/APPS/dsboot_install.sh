@@ -37,6 +37,39 @@ fast_fstab() {
 	mv /etc/fstab.dsboot /etc/fstab
 }
 
+# Compressed copies of the big libraries (see rcS). Only files that are byte for byte what
+# this device has are used, each noted with the size and date of the original.
+hot() {
+	[ -f "$src/hot.sqsh" ] || return 0
+	if cmp -s "$src/hot.sqsh" "$state/hot.sqsh" && [ -f "$state/hot.list" ]; then
+		echo "hot: already installed"
+		return 0
+	fi
+	# An older set is in use: let go of it so that the originals show again.
+	if [ -f "$state/hot.list" ]; then
+		while read -r _ _ path; do
+			umount -l "$path" 2> /dev/null
+		done < "$state/hot.list"
+		umount -l /run/dsboot-hot 2> /dev/null
+	fi
+	rm -f "$state/hot.sqsh" "$state/hot.list"
+	mkdir -p /tmp/dsboot-hot
+	cp "$src/hot.sqsh" "$state/hot.new" && mount -t squashfs -o loop,ro "$state/hot.new" /tmp/dsboot-hot ||
+		{ echo "hot: cannot mount the image"; rm -f "$state/hot.new"; return 1; }
+	: > "$state/hot.list.new"
+	for f in $(cd /tmp/dsboot-hot && find . -type f); do
+		f=${f#.}
+		if cmp -s "/tmp/dsboot-hot$f" "$f"; then
+			echo "$(stat -c '%s %Y' "$f") $f" >> "$state/hot.list.new"
+		else
+			echo "hot: $f is not the same on this device; left out"
+		fi
+	done
+	umount /tmp/dsboot-hot
+	mv "$state/hot.new" "$state/hot.sqsh" && mv "$state/hot.list.new" "$state/hot.list"
+	echo "hot: $(grep -c . "$state/hot.list") files will come from compressed copies"
+}
+
 install() {
 	date
 	echo "firmware: $(tr '\n' ' ' < /mnt/vendor/oem/version.ini 2>&1)"
@@ -84,6 +117,8 @@ install() {
 		rm -f /etc/fstab.dsboot
 		echo "fstab: left alone"
 	fi
+
+	hot || rm -f "$state/hot.sqsh" "$state/hot.list" "$state/hot.new" "$state/hot.list.new"
 
 	# Reading ahead. The next start reads nothing ahead and instead notes what it reads from
 	# the card; the starts after that use those notes. See rcS.

@@ -22,10 +22,13 @@ const STEP: u64 = 256 * 1024;
 
 const USAGE: &str = "usage: dsboot-readahead record LIST --first NAME... --under DIR...
        dsboot-readahead play LIST...
+       dsboot-readahead cover ROOT LIST
 
   record  write to LIST the parts of files now in memory: first the files the running
           programs called NAME have open, in that order, then every file under each DIR
-  play    read those parts back in, in the order listed, one LIST after another";
+  play    read those parts back in, in the order listed, one LIST after another
+  cover   LIST names files as \"size date path\"; mount ROOT/path over each path that
+          still has that size and date (seconds)";
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -37,6 +40,7 @@ fn main() {
             rest.iter().for_each(|list| drop(play(list)));
             Ok(())
         }
+        Some((verb, rest)) if verb == "cover" && rest.len() == 2 => cover(&rest[0], &rest[1]),
         _ => Err(USAGE.to_owned()),
     };
     if let Err(e) = done {
@@ -179,6 +183,36 @@ fn stand_back() {
 
 #[cfg(not(target_os = "linux"))]
 fn stand_back() {}
+
+/// Mounts the copies under `root` over the files they are copies of: what a shell loop of
+/// stat and mount would do, without starting two programs a file.
+#[cfg(target_os = "linux")]
+fn cover(root: &str, list: &str) -> Result<(), String> {
+    use std::ffi::CString;
+    let lines = BufReader::new(File::open(list).map_err(|e| format!("{list}: {e}"))?);
+    for line in lines.lines().map_while(Result::ok) {
+        let mut parts = line.splitn(3, ' ');
+        let (Some(size), Some(date), Some(path)) = (parts.next(), parts.next(), parts.next()) else { continue };
+        let Ok(meta) = fs::metadata(path) else { continue };
+        if size.parse() != Ok(meta.len()) || date.parse() != Ok(meta.mtime()) {
+            eprintln!("dsboot-readahead: {path} has changed; not covered");
+            continue;
+        }
+        let (Ok(from), Ok(to)) = (CString::new(format!("{root}{path}")), CString::new(path)) else { continue };
+        // SAFETY: both strings are NUL-terminated and outlive the call; a bind mount takes no
+        // filesystem type or data.
+        let done = unsafe { libc::mount(from.as_ptr(), to.as_ptr(), std::ptr::null(), libc::MS_BIND, std::ptr::null()) };
+        if done != 0 {
+            eprintln!("dsboot-readahead: {path}: {}", std::io::Error::last_os_error());
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(target_os = "linux"))]
+fn cover(_root: &str, _list: &str) -> Result<(), String> {
+    Err("cover works on Linux only".to_owned())
+}
 
 fn play(list: &str) -> Result<(), String> {
     let lines = BufReader::new(File::open(list).map_err(|e| format!("{list}: {e}"))?);

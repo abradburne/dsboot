@@ -4,3 +4,4 @@ card/Roms/APPS/dsboot/boot-*.img
 card/Roms/APPS/dsboot/boot-images.txt
 __pycache__/
 card/Roms/APPS/dsboot/readahead
+card/Roms/APPS/dsboot/hot.sqsh

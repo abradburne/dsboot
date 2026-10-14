@@ -9,7 +9,7 @@ Written for a device that starts its OS from the SD card, where a bad result can
 reflashing the card. Tried on one such device, which starts dslot at power-on: the vendor
 launch script started at 12.4 s instead of 14.5 s, and the first picture came up at 18.3 s
 instead of 21.1 s. Changes to dslot's own start-up brought that to 16.8 s, the gzipped
-kernel below to 14.9 s, and the later changes listed here to 13.7 s.
+kernel below to 14.9 s, and the later changes listed here to 12.9 s.
 
 ## Where a stock start goes
 
@@ -47,6 +47,12 @@ If it does not restart, nothing was changed; `Roms/APPS/dsboot/install.log` says
   reads nothing ahead and is a little slower: it notes what it has read from the card at
   three moments, and later starts read those lists back in that order, at idle priority so
   that nothing else waits for the card behind it. Worth about 0.6 s.
+
+- gzip-compressed copies of the largest libraries a start reads (the 54 MB graphics driver
+  above all) are kept in `/etc/dsboot/hot.sqsh` and mounted over the originals at each start,
+  so that less has to come off the card. Built on the Mac with `tools/mkhot.sh` from the stock
+  firmware image; the installer only uses files identical to the device's own. Worth about
+  0.8 s. The image holds the firmware's own libraries, so it is not something to pass on.
 
 The stock `rcS`, `loadapp.sh` and `fstab` are kept in `/etc/dsboot/stock`.
 
