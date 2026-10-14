@@ -1,8 +1,8 @@
 #!/bin/bash
-# bootprof: run from Apps on the stock RG DS+ menu, soon after power-on. Writes where the boot
-# time went to Roms/APPS/bootprof/ on this card. Nothing on the system partitions is changed.
+# dsboot_timing: run from Apps on the stock RG DS+ menu, soon after power-on. Writes where the
+# start's time went to Roms/APPS/dsboot/timing/ on this card. Changes nothing on the device.
 
-out="$(cd "$(dirname "$0")" && pwd)/bootprof"
+out="$(cd "$(dirname "$0")" && pwd)/dsboot/timing"
 n=1
 while [ -e "$out/boot$n" ]; do n=$((n + 1)); done
 out="$out/boot$n"
@@ -11,13 +11,13 @@ mkdir -p "$out" || exit 1
 # Kernel log stamps count from power-on (the kernel is built to take them from the ARM timer);
 # /proc/uptime counts from when Linux started its clock. A mark written to the log now and read
 # back beside the uptime gives the difference: the time spent before the kernel ran.
-echo "bootprof mark $$" > /dev/kmsg
+echo "dsboot_timing mark $$" > /dev/kmsg
 up=$(cut -d' ' -f1 /proc/uptime)
 now=$(date '+%s')
 dmesg > "$out/dmesg.txt" 2>&1
 
 stamp() { grep -m 1 -E "$1" "$out/dmesg.txt" | sed 's/^[^[]*\[ *\([0-9.]*\)\].*/\1/'; }
-mark=$(stamp "bootprof mark $$")
+mark=$(stamp "dsboot_timing mark $$")
 first=$(stamp '^[^[]*\[ *[0-9.]+\]')
 init=$(stamp 'Run /.*init as init process|Freeing unused kernel')
 
@@ -34,7 +34,7 @@ processes() {
 }
 
 {
-	echo "bootprof $(date '+%F %T')"
+	echo "dsboot_timing $(date '+%F %T')"
 	echo "firmware:    $(tr '\n' ' ' < /mnt/vendor/oem/version.ini 2>&1)"
 	echo "boot_device: $(cat /sys/class/anbernic_misc/boot_device 2>&1)"
 	echo "cmdline:     $(cat /proc/cmdline)"

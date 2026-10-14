@@ -7,3 +7,4 @@ card/Roms/APPS/dsboot/*.img
 card/Roms/APPS/dsboot/*.png
 card/Roms/APPS/dsboot/hot.sqsh
 boot-pictures/
+card/Roms/APPS/dsboot/timing/

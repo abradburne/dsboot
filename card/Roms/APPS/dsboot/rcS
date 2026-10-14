@@ -8,7 +8,7 @@
 
 state=/etc/dsboot
 d=/etc/init.d
-# Seconds since the kernel started its clock, beside each step, for bootprof to collect.
+# Seconds since the kernel started its clock, beside each step, for dsboot_timing to collect.
 log=/tmp/dsboot.log
 
 note() {
