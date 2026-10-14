@@ -20,6 +20,8 @@ stamp() { grep -m 1 -E "$1" "$out/dmesg.txt" | sed 's/^[^[]*\[ *\([0-9.]*\)\].*/
 mark=$(stamp "dsboot_timing mark $$")
 first=$(stamp '^[^[]*\[ *[0-9.]+\]')
 init=$(stamp 'Run /.*init as init process|Freeing unused kernel')
+# The boot logo is let go when the first thing an app has drawn reaches the screen.
+picture=$(stamp 'Freeing drm_logo memory')
 
 # Every process still running, in the order it started, in seconds since Linux started its
 # clock. The scripts that ran and finished are not here; they show as the gaps.
@@ -32,6 +34,14 @@ processes() {
 		printf '%5d.%02d %6s %6s  %s\n' $((${20} / 100)) $((${20} % 100)) "${d#/proc/}" "$2" "$cmd"
 	done | sort -n
 }
+
+processes > "$out/processes.txt"
+# The stock menu runs under dmenu_ln, which starts it again each time an app ends: the first
+# one still running is when the menu was first started.
+menu=$(awk '/dmenu_ln/ { print $1; exit }' "$out/processes.txt")
+
+# Seconds since power-on, for a time on Linux's clock.
+on() { [ -n "$1" ] && [ -n "$mark" ] && awk "BEGIN { printf \"%.2f\", $1 + $mark - $up }"; }
 
 {
 	echo "dsboot_timing $(date '+%F %T')"
@@ -48,8 +58,14 @@ processes() {
 		echo "before the kernel's clock: $(awk "BEGIN { printf \"%.2f\", $mark - $up }") s"
 	fi
 	echo
+	echo "Seconds from power-on:"
+	echo "  kernel starts           ${first:-?}"
+	echo "  init starts             ${init:-?}"
+	echo "  stock menu started      $(on "$menu" || echo "-")"
+	echo "  first picture on screen ${picture:-?}"
+	echo
 	printf '%8s %6s %6s  %s\n' start pid ppid command
-	processes
+	cat "$out/processes.txt"
 } > "$out/report.txt" 2>&1
 
 for f in /var/log/messages /var/log/mount-all.log /var/log/weston.log /tmp/dsboot.log /tmp/loadapp.trace /etc/dsboot/readahead.[123] /etc/dsboot/hot.list; do
