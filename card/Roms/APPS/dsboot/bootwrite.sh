@@ -36,7 +36,7 @@ put() {
 }
 
 write() {
-	date
+	date '+%F %T'
 	case "$what" in fast | stock) ;; *) echo "usage: bootwrite.sh fast|stock"; return 1 ;; esac
 	[ "$(cat /sys/class/anbernic_misc/boot_device)" = 1 ] || { echo "the OS is not running from the SD card: refused"; return 1; }
 	# Both the card and the internal storage have a partition called boot. Take the one on

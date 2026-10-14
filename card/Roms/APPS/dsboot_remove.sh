@@ -7,7 +7,7 @@ state=/etc/dsboot
 loadapp=/mnt/vendor/ctrl/loadapp.sh
 
 remove() {
-	date
+	date '+%F %T'
 	[ -f "$state/stock/rcS" ] || { echo "nothing to remove: no $state/stock/rcS"; return 1; }
 	cp -p "$state/stock/rcS" /etc/init.d/rcS.stock && mv /etc/init.d/rcS.stock /etc/init.d/rcS || return 1
 	if [ -f "$state/stock/loadapp.sh" ]; then

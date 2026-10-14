@@ -78,7 +78,7 @@ hot() {
 }
 
 install() {
-	date
+	date '+%F %T'
 	echo "firmware: $(tr '\n' ' ' < /mnt/vendor/oem/version.ini 2>&1)"
 
 	[ -f "$src/rcS" ] || { echo "missing $src/rcS"; return 1; }
