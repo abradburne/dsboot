@@ -2,8 +2,10 @@
 # bootwrite.sh fast|stock: rewrites the boot partition of the SD card the OS runs from, and
 # restarts. Used by dsboot_boot_fast and dsboot_boot_stock in Apps.
 #
-#   fast   the device's own kernel, gzipped, so that it loads in half the time; and, if
-#          logo.png or logo_kernel.png are in this folder, those as the two boot pictures
+#   fast   the device's own kernel, gzipped, so that it loads in half the time, with the two
+#          boot pictures from default/ ("RG DS Plus"), or logo.png and logo_kernel.png from
+#          this folder where they are there; an empty file called stock-pictures here keeps
+#          the stock ones
 #   stock  the boot partition as it was
 #
 # The first time, the partition as it is is kept in this folder as boot-stock.img, with its
@@ -66,8 +68,13 @@ write() {
 
 	if [ "$what" = fast ]; then
 		pictures=()
-		[ ! -f "$here/logo.png" ] || pictures+=(--logo "$here/logo.png")
-		[ ! -f "$here/logo_kernel.png" ] || pictures+=(--kernel-logo "$here/logo_kernel.png")
+		if [ ! -f "$here/stock-pictures" ]; then
+			for name in logo:--logo logo_kernel:--kernel-logo; do
+				picture="$here/${name%%:*}.png"
+				[ -f "$picture" ] || picture="$here/default/${name%%:*}.png"
+				[ ! -f "$picture" ] || pictures+=("${name#*:}" "$picture")
+			done
+		fi
 		image build "$stock" "$fast" --gzip-kernel --status "$status" "${pictures[@]}" || { echo "could not make the image"; return 1; }
 		rm -f "$status"
 		new=$fast

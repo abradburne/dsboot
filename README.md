@@ -50,12 +50,11 @@ it is a separate step:
 The first time, the boot partition as it was is copied to the card as
 `Roms/APPS/dsboot/boot-stock.img`. Keep that file: it is what everything goes back to.
 
-The same step can change the two boot pictures, the Anbernic logo and the line of text under
-it. Put PNG files in `Roms/APPS/dsboot` on the card, named `logo.png` (350×160) and
-`logo_kernel.png` (1024×110), and run **dsboot_boot_fast** again. Pictures of another size are
-fitted inside on black. Without them the stock pictures stay. `pictures/` in this repository
-has two pairs to start from, with their SVG sources: `dslot` (DSlot's name and a two-screen
-icon) and `rgdsplus` ("RG DS Plus").
+The same step changes the two boot pictures, the Anbernic logo and the line of text under it,
+to "RG DS Plus" and a small loading bar. To keep the stock pictures instead, put an empty file
+called `stock-pictures` in `Roms/APPS/dsboot` on the card before running it. To use your own,
+put PNG files there named `logo.png` (350×160) and `logo_kernel.png` (1024×110); pictures of
+another size are fitted inside on black. `pictures/dslot` in this repository has a DSlot pair.
 
 ## Undo
 

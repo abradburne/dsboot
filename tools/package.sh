@@ -13,7 +13,8 @@ mkdir -p "$stage"
 cp -R card/Roms "$stage/"
 cp readahead/target/aarch64-unknown-linux-gnu/release/dsboot-readahead "$stage/Roms/APPS/dsboot/readahead"
 # Nothing made on or for a particular device goes in.
-find "$stage" \( -name .DS_Store -o -name '*.img' -o -name '*.png' -o -name '*.log' -o -name trace \) -delete
+find "$stage" \( -name .DS_Store -o -name '*.img' -o -name '*.log' -o -name trace \) -delete
+rm -f "$stage/Roms/APPS/dsboot/logo.png" "$stage/Roms/APPS/dsboot/logo_kernel.png"
 cp README.md LICENSE "$stage/Roms/APPS/dsboot/"
 (cd "$stage" && zip -qr "../dsboot-$version-rgdsplus.zip" Roms)
 echo "dist/dsboot-$version-rgdsplus.zip"
