@@ -16,6 +16,13 @@ be rolled back the same way.
 Measured on one RG DS+ starting from its SD card, firmware V1.0 (20260915). How, and what each
 change gave: [docs/benchmarks.md](docs/benchmarks.md).
 
+### Try DSlot too
+
+If you play DS games on your DS+, have a look at [DSlot](https://github.com/abradburne/dslot): a
+game shelf that shows your games as carts above a card slot, with box art, play time and ratings,
+and you push a cart in to play. Installed on the TF1/INT card and set to start at power-on, it
+starts as soon as dsboot has the screen up; that is the 11.5 s above.
+
 ## What it does
 
 The DS+ spends most of its start waiting for the SD card, which it reads at about 20 MB/s
