@@ -2,7 +2,7 @@
 
 ## 0.1.0
 
-First release. On one RG DS+ starting dslot at power-on, the first picture comes 11.5 s after
+First release. On one RG DS+ starting DSlot at power-on, the first picture comes 11.5 s after
 power-on instead of 21.1 s.
 
 - Stock start-up scripts run in a better order; the vendor launch script's fixed wait is

@@ -8,7 +8,7 @@ folder to the card and run it from **Apps**. Everything it changes is kept and c
 
 | | Stock | dsboot |
 |---|---|---|
-| Power-on to the first picture of an app started at power-on ([dslot](https://github.com/abradburne/dslot)) | 21.1 s | 11.5 s |
+| Power-on to the first picture of an app started at power-on ([DSlot](https://github.com/abradburne/dslot)) | 21.1 s | 11.5 s |
 
 Measured on one RG DS+ starting from its SD card, firmware V1.0 (20260915). Starting into the
 stock menu instead gets the same changes but has not been timed yet.
@@ -110,7 +110,7 @@ An app on the card the DS+ starts from can ask to be started as soon as the scre
 than by the vendor launch script about a second later. Put an executable `update/early.sh` on
 that card, beside the `update/update.sh` the stock system already runs at start. Without dsboot
 nothing runs `early.sh`, so `update.sh` should start the app as before and, when `early.sh` has
-already done so, wait for it instead. dslot does both; see its `boot.sh` and `early.sh`.
+already done so, wait for it instead. DSlot does both; see its `boot.sh` and `early.sh`.
 
 When dsboot runs `early.sh`, `DSBOOT_SHOWN` names a file to create once the app's first picture
 is on screen. dsboot holds Wi-Fi and Bluetooth back until then (five seconds at most), so that
