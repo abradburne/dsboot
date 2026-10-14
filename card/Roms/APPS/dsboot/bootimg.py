@@ -29,7 +29,6 @@ resource block, and both copies are changed.
 """
 
 import argparse
-import gzip
 import hashlib
 import struct
 import zlib
@@ -237,6 +236,22 @@ def repaint(resource, name, picture):
     resource[at + 224:at + 244] = hashlib.sha1(resource[offset:offset + size]).digest()
 
 
+def gzip(data, status=None):
+    """What gzip.compress(data, 9, mtime=0) gives, a megabyte at a time, so that progress can
+    be shown: it takes half a minute on the device."""
+    packer = zlib.compressobj(9, zlib.DEFLATED, -15)
+    out = bytearray(b"\x1f\x8b\x08\x00\x00\x00\x00\x00\x02\xff")
+    step = 1 << 20
+    for at in range(0, len(data), step):
+        out += packer.compress(data[at:at + step])
+        if status:
+            with open(status, "w") as f:
+                f.write(f"{min(at + step, len(data)) >> 20} {len(data) >> 20} compressing the kernel\n")
+    out += packer.flush()
+    out += struct.pack("<II", zlib.crc32(data), len(data) & 0xFFFFFFFF)
+    return bytes(out)
+
+
 def build(args):
     fit = Fit(open(args.stock, "rb").read())
     fit.check()
@@ -262,7 +277,7 @@ def build(args):
     if args.gzip_kernel:
         if fit.get("/images/kernel:compression") != b"none\0":
             die("kernel is already compressed")
-        kernel = gzip.compress(kernel, 9, mtime=0)
+        kernel = gzip(kernel, args.status)
         fit.put("/images/kernel:compression", b"gzip\0")
 
     kernel_at = fit.number("/images/kernel:data-position")
@@ -327,6 +342,7 @@ def main():
     one.add_argument("--kernel-logo")
     one.add_argument("--gzip-kernel", action="store_true")
     one.add_argument("--sd-clock", type=int)
+    one.add_argument("--status")
     one = commands.add_parser("check")
     one.add_argument("image")
     args = parser.parse_args()

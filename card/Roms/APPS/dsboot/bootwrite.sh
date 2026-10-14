@@ -68,7 +68,8 @@ write() {
 		pictures=()
 		[ ! -f "$here/logo.png" ] || pictures+=(--logo "$here/logo.png")
 		[ ! -f "$here/logo_kernel.png" ] || pictures+=(--kernel-logo "$here/logo_kernel.png")
-		image build "$stock" "$fast" --gzip-kernel "${pictures[@]}" || { echo "could not make the image"; return 1; }
+		image build "$stock" "$fast" --gzip-kernel --status "$status" "${pictures[@]}" || { echo "could not make the image"; return 1; }
+		rm -f "$status"
 		new=$fast
 	else
 		new=$stock
@@ -91,9 +92,23 @@ write() {
 	return 1
 }
 
-if write >> "$here/boot.log" 2>&1; then
+# What is going on, on screen, while this runs: the stock menu has made way for it.
+status=/tmp/dsboot.status
+log=/tmp/dsboot-boot.log
+: > "$log"
+python3 "$here/progress.py" "Boot partition" "$log" "$status" 2> /dev/null &
+shown=$!
+
+if write > "$log" 2>&1; then
+	echo "restarting" >> "$log"
+	cat "$log" >> "$here/boot.log"
 	sync
+	sleep 2
+	kill $shown 2> /dev/null
 	reboot
 else
+	cat "$log" >> "$here/boot.log"
 	sync
+	sleep 5
+	kill $shown 2> /dev/null
 fi

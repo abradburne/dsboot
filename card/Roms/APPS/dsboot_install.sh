@@ -55,7 +55,8 @@ hot() {
 	fi
 	rm -f "$state/hot.sqsh" "$state/hot.list" "$state/hot-files.txt"
 	echo "hot: making the compressed copies; this takes a minute"
-	python3 "$src/mksqsh.py" "$state/hot.new" "$src/hot-files.txt" || return 1
+	python3 "$src/mksqsh.py" "$state/hot.new" "$src/hot-files.txt" --status "$status" || return 1
+	rm -f "$status"
 	# Check the kernel takes it, and note each original's size and date.
 	mkdir -p /tmp/dsboot-hot
 	mount -t squashfs -o loop,ro "$state/hot.new" /tmp/dsboot-hot || { echo "hot: the kernel will not mount it"; return 1; }
@@ -179,9 +180,21 @@ install() {
 	echo "installed"
 }
 
-if install > "$src/install.log" 2>&1; then
+# What is going on, on screen, while this runs: the stock menu has made way for it.
+status=/tmp/dsboot.status
+: > "$src/install.log"
+python3 "$src/progress.py" "Installing dsboot" "$src/install.log" "$status" 2> /dev/null &
+shown=$!
+
+if install >> "$src/install.log" 2>&1; then
+	echo "restarting" >> "$src/install.log"
 	sync
+	sleep 2
+	kill $shown 2> /dev/null
 	reboot
 else
+	echo "nothing was changed; see install.log" >> "$src/install.log"
 	sync
+	sleep 5
+	kill $shown 2> /dev/null
 fi

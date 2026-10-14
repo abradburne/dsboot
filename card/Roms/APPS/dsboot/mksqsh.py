@@ -6,11 +6,12 @@ the originals. The device has no mksquashfs, so this writes the image itself, wi
 that needs: regular files and the directories above them, owned by root, no fragments, no
 extended attributes, no export table. Metadata is stored uncompressed; it is a few kilobytes.
 
-  mksqsh.py OUT LIST [--root DIR] [--level N]
+  mksqsh.py OUT LIST [--root DIR] [--level N] [--status FILE]
 
 LIST names the files, one absolute path per line; lines starting with # and files that do not
 exist are passed over. Each file is read from DIR + path (default DIR: /) and stored at path,
-with its permissions and modification time.
+with its permissions and modification time. With --status, FILE is rewritten after each file
+as "DONE TOTAL PATH", for progress.py to show.
 """
 
 import argparse
@@ -64,7 +65,7 @@ class Dir:
         self.mtime = mtime
 
 
-def build(out, paths, root, level):
+def build(out, paths, root, level, status=None):
     now = int(time.time())
     top = Dir(now)
     for path in paths:
@@ -78,6 +79,7 @@ def build(out, paths, root, level):
         image.write(bytes(96))
         inodes, dirs = Table(), Table()
         count = [0]
+        done = [0]
 
         def put_file(path):
             source = root.rstrip("/") + path
@@ -103,6 +105,10 @@ def build(out, paths, root, level):
                 sys.exit(f"mksqsh: {path} is too large")
             count[0] += 1
             number = count[0]
+            if status:
+                done[0] += 1
+                with open(status, "w") as f:
+                    f.write(f"{done[0]} {len(paths)} {path}\n")
             inode = struct.pack("<HHHHII", FILE_TYPE, stat.S_IMODE(info.st_mode), 0, 0, int(info.st_mtime), number)
             inode += struct.pack("<IIII", start, NO_FRAGMENT, 0, info.st_size)
             inode += struct.pack(f"<{len(sizes)}I", *sizes)
@@ -191,6 +197,7 @@ def main():
     parser.add_argument("list")
     parser.add_argument("--root", default="/")
     parser.add_argument("--level", type=int, default=6)
+    parser.add_argument("--status")
     args = parser.parse_args()
     paths = []
     with open(args.list) as f:
@@ -207,7 +214,7 @@ def main():
                 print(f"mksqsh: no file {path}; left out")
     if not paths:
         sys.exit("mksqsh: no files")
-    build(args.out, paths, args.root, args.level)
+    build(args.out, paths, args.root, args.level, args.status)
     print(f"mksqsh: {len(paths)} files, {os.path.getsize(args.out) // 1024} KB")
 
 
