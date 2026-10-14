@@ -81,7 +81,6 @@ card cannot be read faster.
 
 - Starting into the stock menu, without an app at power-on. It gets the same changes up to the
   vendor launch script.
-- A device starting from its internal storage.
 
 ## Measuring your own
 

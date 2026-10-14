@@ -40,12 +40,12 @@ whatever the card. dsboot:
 
 ## What you need
 
-- An RG DS+ on the stock firmware V1.0 (20260915), starting from an SD card.
+- An RG DS+ on the stock firmware V1.0 (20260915). Its OS is on the SD card in the slot marked
+  TF1/INT.
 - A computer with an SD card reader.
 
-dsboot has only been tried on a device that starts from its SD card. The main install should
-also work on one that starts from internal storage; the compressed-kernel step refuses to run
-there, and on any other firmware.
+dsboot has been tried on one device. The compressed-kernel step refuses to run on any other
+firmware.
 
 ## Install
 
