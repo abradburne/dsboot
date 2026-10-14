@@ -16,7 +16,7 @@ be rolled back the same way.
 Measured on one RG DS+ starting from its SD card, firmware V1.0 (20260915). How, and what each
 change gave: [docs/benchmarks.md](docs/benchmarks.md).
 
-### Try DSlot too
+## Try DSlot too
 
 If you play DS games on your DS+, have a look at [DSlot](https://github.com/abradburne/dslot): a
 game shelf that shows your games as carts above a card slot, with box art, play time and ratings,
