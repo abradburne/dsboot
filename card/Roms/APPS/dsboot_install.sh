@@ -77,6 +77,27 @@ hot() {
 	rm -f "$state/readahead.1" "$state/readahead.2" "$state/readahead.3"
 }
 
+# The picture the stock menu shows while it powers off, in both its styles: dsboot's, or
+# goodbye.png beside rcS on the card if there is one, or the stock one with stock-pictures there.
+shutdown_picture() {
+	for style in res1 res2; do
+		picture=/mnt/vendor/resource/$style/shutdown/goodbye.png
+		kept="$state/stock/goodbye-$style.png"
+		[ -f "$picture" ] || continue
+		[ -f "$kept" ] || cp -p "$picture" "$kept" || return 1
+		if [ -f "$src/stock-pictures" ]; then
+			new=$kept
+		elif [ -f "$src/goodbye.png" ]; then
+			new="$src/goodbye.png"
+		else
+			new="$src/default/goodbye.png"
+		fi
+		[ -f "$new" ] || continue
+		cmp -s "$new" "$picture" || cat "$new" > "$picture" || return 1
+	done
+	echo "shutdown picture: ${new##*/}"
+}
+
 install() {
 	date '+%F %T'
 	echo "firmware: $(tr '\n' ' ' < /mnt/vendor/oem/version.ini 2>&1)"
@@ -136,6 +157,8 @@ install() {
 	if [ -f /mnt/mmc/update/early.sh ]; then
 		: > "$state/early"
 	fi
+
+	shutdown_picture || echo "shutdown picture: left alone"
 
 	# The stock switch for skipping the disk check at every start.
 	: > /.skip_fsck

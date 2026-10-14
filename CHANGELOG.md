@@ -16,6 +16,7 @@ power-on instead of 21.1 s.
 - dsboot_boot_fast: the device's own kernel, gzipped, and optional boot pictures, written to
   the boot partition, with the stock partition kept on the card to go back to.
 - Falls back to the stock start-up by itself if a start does not reach the menu.
-- dsboot_boot_fast writes "RG DS Plus" boot pictures unless told otherwise.
+- dsboot_boot_fast writes "RG DS Plus" boot pictures unless told otherwise, and dsboot_install
+  a "SEE YOU SOON" power-off picture.
 - Installing and rewriting the boot partition show their progress on both screens.
 - dsboot_timing: where a start's time went, written to the card.

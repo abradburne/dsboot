@@ -16,6 +16,12 @@ remove() {
 	if [ -f "$state/stock/fstab" ]; then
 		cp -p "$state/stock/fstab" /etc/fstab.stock && mv /etc/fstab.stock /etc/fstab || return 1
 	fi
+	for style in res1 res2; do
+		if [ -f "$state/stock/goodbye-$style.png" ]; then
+			cat "$state/stock/goodbye-$style.png" > "/mnt/vendor/resource/$style/shutdown/goodbye.png" &&
+				rm -f "$state/stock/goodbye-$style.png"
+		fi
+	done
 	rm -f /.skip_fsck /etc/profile.d/dsboot.sh
 	rm -f "$state/enabled" "$state/booting" "$state/last" "$state/trace" "$state/trace.sh" "$state/early" "$state/radios-wait" "$state/readahead" "$state/learn" "$state"/readahead.* "$state"/hot.* "$state/hot-files.txt"
 	rm -f "$state/stock/rcS" "$state/stock/loadapp.sh" "$state/stock/fstab"

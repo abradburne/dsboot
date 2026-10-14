@@ -33,6 +33,8 @@ whatever the card. dsboot:
   of five partitions at every start, and half a second spent looking up partitions by name.
 - **Lets an app start as soon as the screen is up**, if the app asks to (DSlot does), with Wi-Fi
   and Bluetooth starting once its first picture is shown.
+- **Swaps the stock menu's power-off picture** (the Anbernic "R") for a sleepy pixel handheld
+  saying "SEE YOU SOON".
 - **Optionally, stores the kernel compressed** (2 seconds) and swaps the two boot pictures for
   "RG DS Plus" ones. This is a separate step because it rewrites the card's boot partition.
 
@@ -72,12 +74,17 @@ The first time, the boot partition as it was is copied to the card as
 `Roms/APPS/dsboot/boot-stock.img`, with its checksum beside it. **Keep that file**: rolling back,
 from the DS+ or from a computer, puts it back.
 
-The boot pictures can be changed before running it, in `Roms/APPS/dsboot` on the card:
+### Pictures
+
+All three pictures can be changed, in `Roms/APPS/dsboot` on the card, before running
+dsboot_install (the power-off one) or dsboot_boot_fast (the two boot ones):
 
 - An empty file called `stock-pictures` keeps Anbernic's.
-- PNG files named `logo.png` (350×160, shown first) and `logo_kernel.png` (1024×110, shown
-  next) are used instead. Other sizes are fitted inside on black. `pictures/` in this repository
-  has the RG DS Plus pair and a DSlot one, with their SVG sources.
+- PNG files named `logo.png` (350×160, shown first at power-on), `logo_kernel.png` (1024×110,
+  shown next) and `goodbye.png` (1024×768, shown by the stock menu as it powers off) are used
+  instead of dsboot's. The boot ones may be other sizes, fitted inside on black.
+
+`pictures/` in this repository has dsboot's, a DSlot pair, and their SVG sources.
 
 ## Roll back
 
@@ -107,8 +114,9 @@ The DS+ then starts exactly as it did before. To finish, delete the `dsboot` fol
 
 Every step writes what it did to `install.log` or `boot.log` in `Roms/APPS/dsboot`.
 
-Known gaps: Wi-Fi and Bluetooth start at a different moment and have not yet been checked after
-a dsboot start; starting into the stock menu (no app at power-on) has not been timed.
+Wi-Fi and Bluetooth start at a different moment but work as before: switched on from the stock
+settings after a dsboot start, both connect. Starting into the stock menu (no app at power-on)
+has not been timed yet.
 
 ## What it changes on the device
 
@@ -118,6 +126,7 @@ a dsboot start; starting into the stock menu (no app at power-on) has not been t
 | `/etc/fstab` | System partitions named by device instead of label | `/etc/dsboot/stock/fstab` |
 | `/mnt/vendor/ctrl/loadapp.sh` | Fixed wait 1.5 s → 0.2 s; waits for Wi-Fi and Bluetooth when they start late | `/etc/dsboot/stock/loadapp.sh` |
 | `/.skip_fsck` | Created: the stock switch for no disk check at every start | (removed on roll back) |
+| `/mnt/vendor/resource/res*/shutdown/goodbye.png` | The power-off picture | `/etc/dsboot/stock/` |
 | `/etc/dsboot/` | dsboot's own files: compressed copies, read-ahead lists, helper | (removed on roll back) |
 | Boot partition | Only with dsboot_boot_fast: kernel gzipped, boot pictures | `Roms/APPS/dsboot/boot-stock.img` on the card |
 
