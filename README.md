@@ -54,7 +54,8 @@ The same step can change the two boot pictures, the Anbernic logo and the line o
 it. Put PNG files in `Roms/APPS/dsboot` on the card, named `logo.png` (350×160) and
 `logo_kernel.png` (1024×110), and run **dsboot_boot_fast** again. Pictures of another size are
 fitted inside on black. Without them the stock pictures stay. `pictures/` in this repository
-has a pair to start from, with their SVG sources.
+has two pairs to start from, with their SVG sources: `dslot` (DSlot's name and a two-screen
+icon) and `rgdsplus` ("RG DS Plus").
 
 ## Undo
 
