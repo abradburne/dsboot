@@ -7,11 +7,10 @@ and emulators; dsboot brings them up in a better order and reads less from the S
 way. It installs from the stock **Apps** menu, keeps a copy of everything it replaces, and can
 be rolled back the same way.
 
-| Seconds from power-on | Stock | dsboot |
+| Seconds from power-on to the first picture | Stock | dsboot |
 |---|---|---|
-| Kernel starts | 5.8 | 3.9 |
-| Screen ready | 13.5 | 8.8 |
-| First picture of the app started at power-on ([DSlot](https://github.com/abradburne/dslot)) | **21.1** | **11.5** |
+| The stock menu, nothing set to start at power-on | 20.2 | **13.2** |
+| [DSlot](https://github.com/abradburne/dslot), set to start at power-on | 21.1 | **11.5** |
 
 Measured on one RG DS+ starting from its SD card, firmware V1.0 (20260915). How, and what each
 change gave: [docs/benchmarks.md](docs/benchmarks.md).
@@ -123,8 +122,7 @@ The DS+ then starts exactly as it did before. To finish, delete the `dsboot` fol
 Every step writes what it did to `install.log` or `boot.log` in `Roms/APPS/dsboot`.
 
 Wi-Fi and Bluetooth start at a different moment but work as before: switched on from the stock
-settings after a dsboot start, both connect. Starting into the stock menu (no app at power-on)
-has not been timed yet.
+settings after a dsboot start, both connect.
 
 ## What it changes on the device
 

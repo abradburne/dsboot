@@ -7,13 +7,14 @@ How dsboot's numbers were measured, and what each change was worth.
 - One Anbernic RG DS+, stock firmware V1.0 (20260915), starting from its SD card: a 16 GB
   SDHC card, which the kernel runs at 50 MHz (SDR104 mode capped by the device tree, about
   20 MB/s). A second SD card, exFAT, holds 251 DS games.
-- [DSlot](https://github.com/abradburne/dslot) starting at power-on, from the OS card.
+- Timed two ways: with [DSlot](https://github.com/abradburne/dslot) starting at power-on from
+  the OS card, and with nothing set to start at power-on, so that the stock menu comes up.
 - Lid open, no charger, Wi-Fi and Bluetooth off in the stock settings.
 
 ## Method
 
 `dsboot_timing` (in Apps) is run once the menu is up. It changes nothing; it reads what the
-system already records:
+system already records, and starts its `report.txt` with a summary in seconds from power-on:
 
 - **Time since power-on.** The kernel takes its log timestamps from the ARM timer, which starts
   at power-on; `/proc/uptime` starts when Linux starts its clock. Writing a line to the kernel log
@@ -29,9 +30,25 @@ system already records:
 Each figure is from at least two cold starts; repeated starts agreed within 0.2 s. A start that
 followed an install (dsboot learns its read-ahead lists then) is not counted.
 
-## Result
+## Results
 
-Seconds from power-on.
+### Booting to the stock menu
+
+Nothing set to start at power-on. dsboot with the compressed kernel. Two starts each, seconds
+from power-on.
+
+| Milestone | Stock | dsboot |
+|---|---|---|
+| Kernel starts | 5.8 | 3.9 |
+| Kernel hands over to init | 7.0 | 5.0 |
+| Stock menu started | 16.6 | 10.1 |
+| **Stock menu's first picture on screen** | **20.2** | **13.2** |
+
+Runs: stock 20.19 s and 20.22 s; dsboot 13.21 s and 13.15 s. 7.0 s sooner, about a third. The
+stock menu takes about 3 s from starting to its first picture either way; dsboot does not touch
+the menu itself.
+
+### Starting DSlot at power-on
 
 | Milestone | Stock | dsboot |
 |---|---|---|
@@ -77,10 +94,6 @@ Two things that were tried and gave nothing:
 What is left is mostly fixed: U-Boot and the graphics driver are Anbernic's binaries, and the
 card cannot be read faster.
 
-## Not measured yet
-
-- Starting into the stock menu, without an app at power-on. It gets the same changes up to the
-  vendor launch script.
 
 ## Measuring your own
 
