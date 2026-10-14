@@ -1,115 +1,138 @@
 # dsboot
 
-Making the Anbernic RG DS+ start faster, on the stock OS (firmware V1.0, 20260915).
+A faster start-up for the Anbernic RG DS+ on its stock OS.
 
-You copy a few files to the card and run one of them from **Apps**. It changes the stock
-system in place, keeps what it replaces, and can be undone. No image to flash.
+dsboot changes how the stock system starts, not what it is: the same Anbernic firmware, menu
+and emulators, brought up in a better order, with less read from the SD card. You copy a
+folder to the card and run it from **Apps**. Everything it changes is kept and can be put back.
 
-Written for a device that starts its OS from the SD card, where a bad result can be fixed by
-reflashing the card. Tried on one such device, which starts dslot at power-on: the vendor
-launch script started at 12.4 s instead of 14.5 s, and the first picture came up at 18.3 s
-instead of 21.1 s. Changes to dslot's own start-up brought that to 16.8 s, the gzipped
-kernel below to 14.9 s, and the later changes listed here to 11.5 s.
-
-## Where a stock start goes
-
-Measured on one device, three power-ons, all within 0.05 s of each other. Seconds from power-on.
-
-| | at | took |
+| | Stock | dsboot |
 |---|---|---|
-| Boot loader, and loading the 39 MB kernel | 0 | 5.8 |
-| Kernel | 5.8 | 1.1 |
-| Mounting, with a disk check of five partitions | 7.0 | 1.9 |
-| Logging, udev, IRQ balancing, D-Bus, Bluetooth, Wi-Fi, NetworkManager, time sync | 8.9 | 2.4 |
-| Weston (the screen) starting, alongside mDNS, cron, PulseAudio and SSH | 11.3 | 3.2 |
-| Vendor launch script, including a fixed 1.5 s wait | 14.5 | about 2.3 |
-| Menu, or the card's `update/update.sh`, starts | about 16.8 | |
+| Power-on to the first picture of an app started at power-on ([dslot](https://github.com/abradburne/dslot)) | 21.1 s | 11.5 s |
+
+Measured on one RG DS+ starting from its SD card, firmware V1.0 (20260915). Starting into the
+stock menu instead gets the same changes but has not been timed yet.
+
+## What you need
+
+- An RG DS+ on the stock firmware V1.0 (20260915), starting from an SD card. (dsboot's main
+  part should also work on a device starting from its internal storage, but it has only been
+  tried on one starting from an SD card. The faster kernel refuses to run on anything else.)
+- A computer with an SD card reader.
 
 ## Install
 
-1. Copy everything in `card/Roms/APPS` into `Roms/APPS` on the card.
-2. On the DS+, open **Apps** and choose **dsboot_install**. The device restarts by itself.
+1. Download `dsboot-0.1.0-rgdsplus.zip` from the latest release and unzip it. Inside is a folder,
+   `Roms`, holding one folder, `APPS`.
+2. Turn the DS+ off, take out the SD card it starts from and put it in your computer. It shows
+   as a drive called `ROMS`.
+3. Copy **everything inside the zip's `Roms/APPS` folder** into the card's `Roms/APPS` folder:
+   the `dsboot` folder and five `.sh` files. Copy the contents, not the `Roms` folder itself.
+4. Put the card back and turn the DS+ on. In the stock menu open **Apps** and choose
+   **dsboot_install**. The screen does not change for a minute or so while it prepares; then
+   the DS+ restarts by itself.
+5. The first start after installing is a little slower than usual: it notes what it reads, so
+   that later starts can read it ahead of time. Let it reach the menu and wait a few seconds.
+   Every start after that is the fast one.
 
-If it does not restart, nothing was changed; `Roms/APPS/dsboot/install.log` says why.
+If the DS+ does not restart at step 4, nothing was changed: `Roms/APPS/dsboot/install.log` on
+the card says why.
+
+### Faster kernel and your own boot pictures
+
+A further 2 seconds come from storing the kernel compressed. This rewrites the card's boot
+partition, which a mistake can leave unable to start until it is put right from a computer, so
+it is a separate step:
+
+- In Apps, choose **dsboot_boot_fast**. It takes half a minute, then the DS+ restarts.
+- **dsboot_boot_stock** puts the boot partition back as it was.
+
+The first time, the boot partition as it was is copied to the card as
+`Roms/APPS/dsboot/boot-stock.img`. Keep that file: it is what everything goes back to.
+
+The same step can change the two boot pictures, the Anbernic logo and the line of text under
+it. Put PNG files in `Roms/APPS/dsboot` on the card, named `logo.png` (350×160) and
+`logo_kernel.png` (1024×110), and run **dsboot_boot_fast** again. Pictures of another size are
+fitted inside on black. Without them the stock pictures stay.
+
+## Undo
+
+**dsboot_remove** in Apps puts back everything dsboot_install changed and restarts.
+**dsboot_boot_stock** does the same for the boot partition. Then delete `dsboot` and the
+`dsboot_*.sh` and `bootprof.sh` files from the card's `Roms/APPS`.
+
+## If something goes wrong
+
+- **A start does not reach the menu.** The next start notices and goes back to the stock way of
+  starting, and stays with it until dsboot_install is run again. Turn the DS+ off and on.
+- **The menu comes up but something is wrong.** Put an empty file called `dsboot.off` at the top
+  of the card's `ROMS` drive. The start after next is a stock one. Then run dsboot_remove.
+- **The DS+ does not start at all after dsboot_boot_fast.** Write `boot-stock.img` back to the
+  card's boot partition from a computer:
+  - Mac: with the card in, run `tools/restore-boot.sh` from this repository. It finds the card,
+    checks the file and asks for your password.
+  - Linux: copy `Roms/APPS/dsboot/boot-stock.img` off the card, check it against
+    `boot-stock.img.sha256` beside it, then write it to the card's third partition, for example
+    `sudo dd if=boot-stock.img of=/dev/sdX3 bs=1M conv=fsync` where `sdX` is the card. Be sure
+    of the device name: this overwrites what is there.
+
+What happened at each step is written to `install.log` and `boot.log` in `Roms/APPS/dsboot`.
 
 ## What it changes
 
-- `/etc/init.d/rcS` is replaced. The new one runs the same stock scripts in a different order:
-  the screen, sound and the menu first, then SSH, time sync, mDNS, cron and the rest while the
-  menu is already loading.
-- The 1.5 s wait in `/mnt/vendor/ctrl/loadapp.sh` becomes 0.2 s.
-- `/.skip_fsck` is created, the stock switch for skipping the disk check at every start.
-- `/etc/fstab` names the four system partitions by device instead of by label, which init
-  spends over half a second looking up.
+Starting is held back by the SD card, which the DS+ reads at about 20 MB/s however fast the
+card is, while the processors mostly wait. Most of what dsboot does is about reading less, or
+reading it at a better moment.
 
-- A small program, `/etc/dsboot/readahead`, starts reading the files the screen, sound and
-  radios will ask for while the card is otherwise idle. The first start after installing
-  reads nothing ahead and is a little slower: it notes what it has read from the card at
-  three moments, and later starts read those lists back in that order, at idle priority so
-  that nothing else waits for the card behind it. Worth about 0.6 s.
+| Change | Saves |
+|---|---|
+| The stock start-up scripts in a different order: screen, sound and menu first; SSH, time sync, network discovery and the rest after the menu is on its way | 2.8 s together with the next two |
+| The vendor launch script's fixed 1.5 s wait shortened to 0.2 s | |
+| No disk check of all five system partitions at every start (the stock `/.skip_fsck` switch) | |
+| `/etc/fstab` names the system partitions by device, not by label, which took over half a second to look up | 0.6 s |
+| Compressed copies of the 112 files a start reads the most of, the 54 MB graphics driver above all, mounted over the originals: 166 MB becomes about 70 MB to read | 0.8 s, and makes the next two pay |
+| Read-ahead: what a start reads is learned once, then read in the background at each start, behind everything else | 0.6 s |
+| An app on the card can start as soon as the screen is up, a second or more before the vendor launch script gets to it; Wi-Fi and Bluetooth then wait until it is on screen | 1.5 s with the two above |
+| The kernel stored gzip-compressed (dsboot_boot_fast) | 1.9 s |
 
-- gzip-compressed copies of the files a start reads the most of before the screen is up (the
-  graphics driver above all; the list is `tools/hot-files.txt`) are kept in `/etc/dsboot/hot.sqsh` and mounted over the originals at each start,
-  so that less has to come off the card. Built on the Mac with `tools/mkhot.sh` from the stock
-  firmware image; the installer only uses files identical to the device's own. Worth about
-  0.8 s. The image holds the firmware's own libraries, so it is not something to pass on.
+The files changed are `/etc/init.d/rcS`, `/etc/fstab` and `/mnt/vendor/ctrl/loadapp.sh`, kept
+as they were in `/etc/dsboot/stock`, plus `/.skip_fsck`. Everything else dsboot adds is in
+`/etc/dsboot`. The compressed copies are made on the device from its own files, and only used
+while each original keeps the size and date it had then.
 
-- An app on the OS card can be started as soon as the screen is up, without waiting for the
-  vendor launch script: `update/early.sh`, beside the `update/update.sh` that script runs. dslot
-  installs one. When there is one, Wi-Fi and Bluetooth are started once the app has its first
-  picture up (it says so by creating the file named in `DSBOOT_SHOWN`), and the vendor launch
-  script waits for them before switching them off, as the stock menu expects.
+Only the start is changed; the menu, emulators and sleep work as before. Wi-Fi and Bluetooth
+start at a different moment and have not yet been checked after a dsboot start.
 
-The stock `rcS`, `loadapp.sh` and `fstab` are kept in `/etc/dsboot/stock`.
+## For app makers: starting early
 
-None of this depends on dslot. The same changes bring the stock menu up sooner.
+An app on the card the DS+ starts from can ask to be started as soon as the screen is up, rather
+than by the vendor launch script about a second later. Put an executable `update/early.sh` on
+that card, beside the `update/update.sh` the stock system already runs at start. Without dsboot
+nothing runs `early.sh`, so `update.sh` should start the app as before and, when `early.sh` has
+already done so, wait for it instead. dslot does both; see its `boot.sh` and `early.sh`.
 
-## If a fast start goes wrong
-
-- A fast start that does not get as far as the menu is noticed at the next power-on, which goes
-  back to the stock order and stays there until **dsboot_install** is run again.
-- From a computer: put an empty file called `dsboot.off` at the top of the `ROMS` volume. The
-  start after the next one is a stock start.
-- **dsboot_remove** in Apps puts everything back and restarts.
+When dsboot runs `early.sh`, `DSBOOT_SHOWN` names a file to create once the app's first picture
+is on screen. dsboot holds Wi-Fi and Bluetooth back until then (five seconds at most), so that
+starting them does not slow the app down.
 
 ## Measuring
 
-**bootprof** in Apps records where the time went, into `Roms/APPS/bootprof/boot1`, `boot2`, …
-Run it as soon as the menu is up. `report.txt` has the time before the kernel, the moment the
-kernel hands over to init, whether it was a fast start, and every running process in the order
-it started.
+**bootprof** in Apps records where a start's time went, into `Roms/APPS/bootprof/boot1`,
+`boot2`, … on the card. Run it as soon as the menu is up. `report.txt` has the time before the
+kernel, every running program in the order it started, and the timings dsboot noted.
 
-## Boot pictures and a compressed kernel
+## Building
 
-The boot partition holds the kernel (39 MB, uncompressed) and the two boot pictures: `logo.bmp`,
-350×160, shown by U-Boot, and `logo_kernel.bmp`, 1024×110, shown by the kernel. `tools/bootimg.py`
-rebuilds it with other pictures and, optionally, a gzipped kernel, and fixes the checksums
-U-Boot verifies. The partition's RSA signature no longer matches afterwards; U-Boot on firmware
-20260915 does not check it. Tried on one device: with the gzipped kernel the kernel starts
-3.9 s after power-on instead of 5.8 s, and the new pictures show.
+The zip holds only dsboot's own scripts and programs; everything that comes from the firmware
+is made on the device. To build it: Rust with
+[cargo-zigbuild](https://github.com/rust-cross/cargo-zigbuild) and zig, then `tools/package.sh`,
+which writes `dist/dsboot-<version>-rgdsplus.zip`.
 
-On the Mac, with ImageMagick installed:
+- `card/Roms/APPS` is what goes on the card; `dsboot/rcS` is the new start-up script.
+- `readahead/` is the program that records and reads ahead, and mounts the compressed copies.
+- `dsboot/mksqsh.py` writes the compressed copies; `dsboot/bootimg.py` rebuilds the boot
+  partition. Both run on the device's own Python.
 
-```
-tools/bootimg.py extract RG-DS-PLUS-EN16GB-V1.0-20260915.IMG work/boot-stock.img
-tools/mkcard.sh
-```
+## Licence
 
-`mkcard.sh` takes the pictures from `art/` and writes `boot-logo.img` (new pictures) and
-`boot-fast.img` (new pictures, gzipped kernel) into `card/Roms/APPS/dsboot`. Copy
-`card/Roms/APPS` to the card as before. In Apps:
-
-- **dsboot_boot_logo** writes the new pictures and restarts.
-- **dsboot_boot_fast** writes the new pictures with the gzipped kernel and restarts.
-- **dsboot_boot_stock** puts back the stock partition, which is kept from the device the first
-  time one of the others runs.
-
-Each refuses unless the OS is running from the SD card and the partition holds an image it
-knows, and reads back what it wrote. `Roms/APPS/dsboot/boot.log` says what happened.
-
-Starting up is held back by how fast the card can be read, and the OS card's slot is clocked
-at 50 MHz, about 20 MB/s whatever the card. `bootimg.py --sd-clock` can raise that, but at
-150 MHz the kernel finds no working tuning and falls back to 50, so it gains nothing here.
-
-**If the device no longer starts** after one of these, put the card in the Mac and run
-`tools/restore-boot.sh`. It writes the stock boot partition back and asks for your password.
+GPL-3.0-or-later. See [LICENSE](LICENSE).

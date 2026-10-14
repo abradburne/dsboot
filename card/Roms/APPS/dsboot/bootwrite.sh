@@ -1,29 +1,34 @@
 #!/bin/bash
-# bootwrite.sh IMAGE: writes one of the boot images in this folder to the boot partition of
-# the SD card the OS runs from, and restarts. Used by the dsboot_boot_* entries in Apps.
+# bootwrite.sh fast|stock: rewrites the boot partition of the SD card the OS runs from, and
+# restarts. Used by dsboot_boot_fast and dsboot_boot_stock in Apps.
 #
-# The boot partition holds the kernel and the boot pictures. A card whose boot partition
-# U-Boot will not accept does not start, and is put right from a computer with
-# tools/restore-boot.sh. So: SD card only, never the internal storage.
+#   fast   the device's own kernel, gzipped, so that it loads in half the time; and, if
+#          logo.png or logo_kernel.png are in this folder, those as the two boot pictures
+#   stock  the boot partition as it was
+#
+# The first time, the partition as it is is kept in this folder as boot-stock.img, with its
+# SHA-256 beside it. A card whose boot partition U-Boot will not accept does not start; it is
+# put right from a computer by writing boot-stock.img back (see the README). So: SD card
+# only, never the internal storage.
 
 here="$(cd "$(dirname "$0")" && pwd)"
-name=$1
-# One line per known image: file name, size in bytes, SHA-256 of that many bytes.
-known="$here/boot-images.txt"
+what=$1
 disk=mmcblk1
+stock="$here/boot-stock.img"
+fast="$here/boot-fast.img"
+now="$here/boot-now.img"
 
-sum() {
-	head -c "$2" "$1" | sha256sum | cut -d' ' -f1
+image() {
+	python3 "$here/bootimg.py" "$@"
 }
 
-# Which known image the partition holds now.
+hash() {
+	sha256sum "$1" | cut -d' ' -f1
+}
+
+# Whether the partition starts with exactly this file.
 holds() {
-	while read -r n size hash; do
-		if [ "$(sum "$dev" "$size")" = "$hash" ]; then
-			echo "$n"
-			return
-		fi
-	done < "$known"
+	[ "$(head -c $(($(wc -c < "$1"))) "$dev" | sha256sum | cut -d' ' -f1)" = "$(hash "$1")" ]
 }
 
 put() {
@@ -32,40 +37,56 @@ put() {
 
 write() {
 	date
+	case "$what" in fast | stock) ;; *) echo "usage: bootwrite.sh fast|stock"; return 1 ;; esac
 	[ "$(cat /sys/class/anbernic_misc/boot_device)" = 1 ] || { echo "the OS is not running from the SD card: refused"; return 1; }
 	# Both the card and the internal storage have a partition called boot. Take the one on
 	# the disk that / is on, and make sure of it.
 	[ "$(mountpoint -d /)" = "$(cat /sys/class/block/${disk}p6/dev)" ] || { echo "/ is not on ${disk}p6: refused"; return 1; }
 	grep -q '^PARTNAME=boot$' "/sys/class/block/${disk}p3/uevent" || { echo "${disk}p3 is not called boot: refused"; return 1; }
 	dev=/dev/${disk}p3
-
-	set -- $(grep "^$name " "$known")
-	[ $# = 3 ] || { echo "$name is not listed in boot-images.txt"; return 1; }
-	size=$2 hash=$3
-	now=$(holds)
-	echo "boot partition holds: ${now:-something unknown}"
-	[ -n "$now" ] || { echo "not a boot partition this was made for: refused"; return 1; }
-	[ "$now" != "$name" ] || { echo "nothing to do"; return 1; }
-
-	# The stock image is not shipped; it is kept from the device the first time.
-	if [ "$now" = boot-stock.img ] && [ ! -f "$here/boot-stock.img" ]; then
-		set -- $(grep "^boot-stock.img " "$known")
-		head -c "$2" "$dev" > "$here/boot-stock.img" && sync
-		echo "stock boot partition kept as boot-stock.img"
+	firmware=$(head -n 1 /mnt/vendor/oem/version.ini 2> /dev/null)
+	if [ "$firmware" != 20260915 ] && [ ! -f "$here/any-firmware" ]; then
+		echo "made for firmware 20260915, this is '$firmware': refused (an empty file called any-firmware here allows it)"
+		return 1
 	fi
-	set -- $(grep "^boot-stock.img " "$known")
-	[ "$(sum "$here/boot-stock.img" "$2")" = "$3" ] || { echo "no good copy of the stock boot partition to go back to: refused"; return 1; }
-	[ "$(sum "$here/$name" "$size")" = "$hash" ] || { echo "$name on the card is damaged: refused"; return 1; }
 
-	if put "$here/$name" && [ "$(sum "$dev" "$size")" = "$hash" ]; then
-		echo "wrote $name and read it back"
+	image extract "$dev" "$now" > /dev/null || { echo "the boot partition does not hold a boot image this understands: refused"; rm -f "$now"; return 1; }
+	if image check "$now" | grep -q '(none)'; then
+		# An uncompressed kernel: the partition is as the firmware made it. Keep it, unless a
+		# copy of it is already kept.
+		if ! cmp -s "$now" "$stock"; then
+			[ ! -f "$stock" ] || mv "$stock" "$here/boot-stock.old.img"
+			mv "$now" "$stock" && hash "$stock" > "$stock.sha256" && sync
+			echo "the boot partition as it is now is kept as boot-stock.img"
+		fi
+	fi
+	rm -f "$now"
+	[ -f "$stock" ] && [ "$(hash "$stock")" = "$(cat "$stock.sha256" 2> /dev/null)" ] && image check "$stock" > /dev/null ||
+		{ echo "no good copy of the stock boot partition to go back to: refused"; return 1; }
+
+	if [ "$what" = fast ]; then
+		pictures=()
+		[ ! -f "$here/logo.png" ] || pictures+=(--logo "$here/logo.png")
+		[ ! -f "$here/logo_kernel.png" ] || pictures+=(--kernel-logo "$here/logo_kernel.png")
+		image build "$stock" "$fast" --gzip-kernel "${pictures[@]}" || { echo "could not make the image"; return 1; }
+		new=$fast
+	else
+		new=$stock
+	fi
+
+	if holds "$new"; then
+		echo "the boot partition already holds this image; nothing to do"
+		return 1
+	fi
+	if put "$new" && holds "$new"; then
+		echo "wrote ${new##*/} and read it back"
 		return 0
 	fi
-	echo "writing $name failed; putting the stock image back"
-	if put "$here/boot-stock.img" && [ "$(holds)" = boot-stock.img ]; then
+	echo "writing ${new##*/} failed; putting the stock image back"
+	if put "$stock" && holds "$stock"; then
 		echo "stock image is back"
 	else
-		echo "COULD NOT PUT THE STOCK IMAGE BACK. Do not turn the device off; if it is already off, use tools/restore-boot.sh on a computer."
+		echo "COULD NOT PUT THE STOCK IMAGE BACK. Do not turn the device off; if it is already off, see the README."
 	fi
 	return 1
 }

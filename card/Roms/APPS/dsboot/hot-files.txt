@@ -95,7 +95,6 @@
 /usr/lib/libgcc_s.so.1
 /usr/lib/libpangoft2-1.0.so.0.5000.14
 /usr/lib/libdrm.so.2.124.0
-/etc/ld.so.cache
 /usr/lib/libcap.so.2.69
 /usr/lib/libhistory.so.8.2
 /usr/lib/libwayland-server.so.0.23.1

@@ -10,12 +10,17 @@ Pictures are replaced in place, in the stock size and layout, so nothing else mo
 the kernel moves the resource block up and changes a few header fields, all without changing
 the header's size. The header's RSA signature is left as it is and no longer matches.
 
-  bootimg.py extract STOCK.IMG boot-stock.img
-  bootimg.py build boot-stock.img out.img [--logo PIC] [--kernel-logo PIC] [--gzip-kernel]
+  bootimg.py extract SOURCE boot-stock.img [--offset BYTES]
+  bootimg.py build boot-stock.img out.img [--logo PNG] [--kernel-logo PNG] [--gzip-kernel]
                                            [--sd-clock HZ]
   bootimg.py check some.img
 
-Pictures can be anything ImageMagick reads; they are fitted inside the stock size on black.
+SOURCE is the boot partition itself (/dev/mmcblk1p3 on a device that starts from its SD card)
+or a whole firmware image, with --offset 16777216. It runs on the device, which has Python, as
+well as on a computer.
+
+Pictures are PNG files, fitted inside the stock size (350x160 and 1024x110) on black; made at
+that size they are used as they are.
 
 --sd-clock changes the fastest clock the kernel may run the OS card's slot at. Stock is
 50000000, which holds a card to about 20 MB/s whatever it is capable of; the slot for the
@@ -27,10 +32,9 @@ import argparse
 import gzip
 import hashlib
 import struct
-import subprocess
+import zlib
 import sys
 
-BOOT_SECTOR = 32768
 BOOT_BYTES = 64 << 20
 SECTOR = 512
 PICTURES = {"logo": "logo.bmp", "kernel_logo": "logo_kernel.bmp"}
@@ -118,16 +122,99 @@ def check_resource(resource):
             die(f"{name}: SHA-1 in the resource index does not match the data")
 
 
+def read_png(file):
+    """(width, height, pixels as R, G, B, A bytes) for any non-interlaced PNG."""
+    data = open(file, "rb").read()
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        die(f"{file}: not a PNG")
+    at, chunks, idat = 8, {}, bytearray()
+    while at < len(data):
+        size, kind = struct.unpack_from(">I4s", data, at)
+        body = data[at + 8:at + 8 + size]
+        if kind == b"IDAT":
+            idat += body
+        else:
+            chunks.setdefault(kind, body)
+        at += 12 + size
+    width, height, depth, colour, _, _, interlace = struct.unpack(">IIBBBBB", chunks[b"IHDR"])
+    channels = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}.get(colour)
+    if channels is None or interlace:
+        die(f"{file}: save it as a PNG that is not interlaced")
+    step = max(1, channels * depth // 8)
+    stride = (width * channels * depth + 7) // 8
+    raw = zlib.decompress(bytes(idat))
+    rows, prev, at = [], bytearray(stride), 0
+    for _ in range(height):
+        kind, line = raw[at], bytearray(raw[at + 1:at + 1 + stride])
+        at += 1 + stride
+        for i in range(stride):
+            left = line[i - step] if i >= step else 0
+            up = prev[i]
+            corner = prev[i - step] if i >= step else 0
+            if kind == 1:
+                line[i] = (line[i] + left) & 255
+            elif kind == 2:
+                line[i] = (line[i] + up) & 255
+            elif kind == 3:
+                line[i] = (line[i] + (left + up) // 2) & 255
+            elif kind == 4:
+                p = left + up - corner
+                pa, pb, pc = abs(p - left), abs(p - up), abs(p - corner)
+                line[i] = (line[i] + (left if pa <= pb and pa <= pc else up if pb <= pc else corner)) & 255
+        rows.append(line)
+        prev = line
+    if depth < 8:
+        # 1, 2 or 4 bits a pixel, packed high bits first: one byte each. Grey is stretched to 0-255.
+        per, mask = 8 // depth, (1 << depth) - 1
+        stretch = 1 if colour == 3 else 255 // mask
+        rows = [bytearray(((r[x // per] >> (8 - depth * (x % per + 1))) & mask) * stretch for x in range(width)) for r in rows]
+    if depth == 16:
+        # Down to 8 bits as ImageMagick rounds it.
+        rows = [bytearray((v + 128 - ((v + 128) >> 8)) >> 8 for v in struct.unpack(f">{len(r) // 2}H", r)) for r in rows]
+    palette = chunks.get(b"PLTE", b"")
+    alpha = chunks.get(b"tRNS", b"")
+    out = bytearray()
+    for row in rows:
+        for x in range(width):
+            px = row[x * channels:(x + 1) * channels]
+            if colour == 0:
+                out += bytes((px[0], px[0], px[0], 255))
+            elif colour == 4:
+                out += bytes((px[0], px[0], px[0], px[1]))
+            elif colour == 2:
+                out += bytes(px) + b"\xff"
+            elif colour == 6:
+                out += bytes(px)
+            else:
+                i = px[0]
+                out += palette[i * 3:i * 3 + 3] + bytes((alpha[i] if i < len(alpha) else 255,))
+    return width, height, out
+
+
 def pixels(picture, width, height):
-    """The picture fitted inside width x height on black, as rows of R, G, B."""
-    size = f"{width}x{height}"
-    made = subprocess.run(
-        ["magick", picture, "-background", "black", "-alpha", "remove", "-resize", size,
-         "-gravity", "center", "-extent", size, "-depth", "8", "rgb:-"],
-        capture_output=True)
-    if made.returncode or len(made.stdout) != width * height * 3:
-        die(f"cannot read {picture}: {made.stderr.decode().strip()}")
-    return made.stdout
+    """The picture fitted inside width x height on black, as rows of R, G, B. Shrinking
+    averages the pixels each new one covers; growing repeats them."""
+    w, h, rgba = read_png(picture)
+    scale = min(width / w, height / h)
+    fw, fh = max(1, round(w * scale)), max(1, round(h * scale))
+    left, top = (width - fw) // 2, (height - fh) // 2
+    out = bytearray(width * height * 3)
+    for y in range(fh):
+        y0, y1 = int(y * h / fh), max(int(y * h / fh) + 1, int((y + 1) * h / fh))
+        for x in range(fw):
+            x0, x1 = int(x * w / fw), max(int(x * w / fw) + 1, int((x + 1) * w / fw))
+            sums, n = [0, 0, 0], 0
+            for sy in range(y0, y1):
+                for sx in range(x0, x1):
+                    r, g, b, a = rgba[(sy * w + sx) * 4:(sy * w + sx) * 4 + 4]
+                    sums[0] += r * a
+                    sums[1] += g * a
+                    sums[2] += b * a
+                    n += 1
+            at = ((top + y) * width + left + x) * 3
+            # On black: each channel weighted by its alpha.
+            out[at:at + 3] = bytes(round(c / 255 / n) for c in sums)
+    return bytes(out)
 
 
 def repaint(resource, name, picture):
@@ -214,13 +301,15 @@ def report(file):
 
 
 def extract(args):
-    with open(args.stock, "rb") as disk:
-        disk.seek(BOOT_SECTOR * SECTOR)
-        image = disk.read(BOOT_BYTES)
-    size = Fit(image).size()
-    if any(image[size:]):
-        die("unexpected data after the FIT in the boot partition")
-    open(args.out, "wb").write(image[:size])
+    with open(args.source, "rb") as disk:
+        disk.seek(args.offset)
+        head = disk.read(4096)
+        size = Fit(head + bytes(64)).size() if head[:4] == b"\xd0\x0d\xfe\xed" else 0
+        if not 0 < size <= BOOT_BYTES:
+            die(f"{args.source}: no boot image there")
+        disk.seek(args.offset)
+        image = disk.read(size)
+    open(args.out, "wb").write(image)
     report(args.out)
 
 
@@ -228,8 +317,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
     one = commands.add_parser("extract")
-    one.add_argument("stock")
+    one.add_argument("source")
     one.add_argument("out")
+    one.add_argument("--offset", type=int, default=0)
     one = commands.add_parser("build")
     one.add_argument("stock")
     one.add_argument("out")

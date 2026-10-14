@@ -37,12 +37,13 @@ fast_fstab() {
 	mv /etc/fstab.dsboot /etc/fstab
 }
 
-# Compressed copies of the big libraries (see rcS). Only files that are byte for byte what
-# this device has are used, each noted with the size and date of the original.
+# Compressed copies of the files a start reads the most of (see rcS), made here from the
+# device's own files, listed in hot-files.txt. Each is noted with the size and date of the
+# original, and is only used while the original keeps them.
 hot() {
-	[ -f "$src/hot.sqsh" ] || return 0
-	if cmp -s "$src/hot.sqsh" "$state/hot.sqsh" && [ -f "$state/hot.list" ]; then
-		echo "hot: already installed"
+	[ -f "$src/hot-files.txt" ] || return 0
+	if [ -f "$state/hot.sqsh" ] && cmp -s "$src/hot-files.txt" "$state/hot-files.txt"; then
+		echo "hot: already made"
 		return 0
 	fi
 	# An older set is in use: let go of it so that the originals show again.
@@ -52,24 +53,27 @@ hot() {
 		done < "$state/hot.list"
 		umount -l /run/dsboot-hot 2> /dev/null
 	fi
-	rm -f "$state/hot.sqsh" "$state/hot.list"
+	rm -f "$state/hot.sqsh" "$state/hot.list" "$state/hot-files.txt"
+	echo "hot: making the compressed copies; this takes a minute"
+	python3 "$src/mksqsh.py" "$state/hot.new" "$src/hot-files.txt" || return 1
+	# Check the kernel takes it, and note each original's size and date.
 	mkdir -p /tmp/dsboot-hot
-	cp "$src/hot.sqsh" "$state/hot.new" && mount -t squashfs -o loop,ro "$state/hot.new" /tmp/dsboot-hot ||
-		{ echo "hot: cannot mount the image"; rm -f "$state/hot.new"; return 1; }
+	mount -t squashfs -o loop,ro "$state/hot.new" /tmp/dsboot-hot || { echo "hot: the kernel will not mount it"; return 1; }
 	: > "$state/hot.list.new"
 	for f in $(cd /tmp/dsboot-hot && find . -type f); do
 		f=${f#.}
 		if cmp -s "/tmp/dsboot-hot$f" "$f"; then
 			echo "$(stat -c '%s %Y' "$f") $f" >> "$state/hot.list.new"
 		else
-			echo "hot: $f is not the same on this device; left out"
+			echo "hot: $f changed while it was being copied; left out"
 		fi
 	done
 	umount /tmp/dsboot-hot
-	mv "$state/hot.new" "$state/hot.sqsh" && mv "$state/hot.list.new" "$state/hot.list"
+	mv "$state/hot.new" "$state/hot.sqsh" && mv "$state/hot.list.new" "$state/hot.list" &&
+		cp "$src/hot-files.txt" "$state/hot-files.txt" || return 1
+	echo "hot: $(grep -c . "$state/hot.list") files will come from compressed copies"
 	# What a start reads from the card is different now: learn it again.
 	rm -f "$state/readahead.1" "$state/readahead.2" "$state/readahead.3"
-	echo "hot: $(grep -c . "$state/hot.list") files will come from compressed copies"
 }
 
 install() {
