@@ -39,8 +39,12 @@ If it does not restart, nothing was changed; `Roms/APPS/dsboot/install.log` says
   menu is already loading.
 - The 1.5 s wait in `/mnt/vendor/ctrl/loadapp.sh` becomes 0.2 s.
 - `/.skip_fsck` is created, the stock switch for skipping the disk check at every start.
+- `/etc/fstab` names the four system partitions by device instead of by label, which init
+  spends over half a second looking up.
 
-The stock `rcS` and `loadapp.sh` are kept in `/etc/dsboot/stock`.
+The stock `rcS`, `loadapp.sh` and `fstab` are kept in `/etc/dsboot/stock`.
+
+None of this depends on dslot. The same changes bring the stock menu up sooner.
 
 ## If a fast start goes wrong
 
@@ -79,6 +83,10 @@ tools/mkcard.sh
 
 - **dsboot_boot_logo** writes the new pictures and restarts.
 - **dsboot_boot_fast** writes the new pictures with the gzipped kernel and restarts.
+- **dsboot_boot_sdfast** is dsboot_boot_fast with the OS card's slot allowed to clock at
+  150 MHz instead of 50 MHz. Starting up is held back by how fast the card can be read, and
+  50 MHz holds any card to about 20 MB/s. Not yet tried on a device: a card or board that
+  cannot keep up may fail to start, or start and misread.
 - **dsboot_boot_stock** puts back the stock partition, which is kept from the device the first
   time one of the others runs.
 

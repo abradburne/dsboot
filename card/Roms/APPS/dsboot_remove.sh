@@ -13,8 +13,12 @@ remove() {
 	if [ -f "$state/stock/loadapp.sh" ]; then
 		cp -p "$state/stock/loadapp.sh" "$loadapp.stock" && mv "$loadapp.stock" "$loadapp" || return 1
 	fi
+	if [ -f "$state/stock/fstab" ]; then
+		cp -p "$state/stock/fstab" /etc/fstab.stock && mv /etc/fstab.stock /etc/fstab || return 1
+	fi
 	rm -f /.skip_fsck /etc/profile.d/dsboot.sh
-	rm -f "$state/enabled" "$state/booting" "$state/last" "$state/stock/rcS" "$state/stock/loadapp.sh"
+	rm -f "$state/enabled" "$state/booting" "$state/last" "$state/trace" "$state/trace.sh"
+	rm -f "$state/stock/rcS" "$state/stock/loadapp.sh" "$state/stock/fstab"
 	rmdir "$state/stock" "$state"
 	echo "removed"
 }

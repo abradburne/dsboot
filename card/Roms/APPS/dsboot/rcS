@@ -16,6 +16,13 @@ note() {
 	echo "$t $*" >> "$log"
 }
 
+# How busy the processor has been and how much has been read from the cards so far: whether
+# a stretch of the start was spent computing or waiting for the card.
+load() {
+	read -r _ user _ system idle iowait _ < /proc/stat
+	note "$1: cpu ticks user $user system $system idle $idle waiting $iowait;$(awk '$3 ~ /^mmcblk[0-9]$/ { printf " %s %d MB in %d ms;", $3, $6 / 2048, $7 }' /proc/diskstats)"
+}
+
 stock() {
 	[ -x "$state/stock/rcS" ] && exec "$state/stock/rcS"
 	# The kept copy is gone. Do what it does: every script, in order.
@@ -52,10 +59,21 @@ run() {
 if [ -f "$state/booting" ]; then
 	rm -f "$state/booting" "$state/enabled"
 	echo "fast boot did not reach the menu; stock order restored" > "$state/last"
+	# init has already mounted from the changed fstab. Put the stock one back and mount again,
+	# in case the change is what went wrong.
+	if [ -f "$state/stock/fstab" ]; then
+		cp "$state/stock/fstab" /etc/fstab && mount -a
+	fi
 	stock
 fi
 : > "$state/booting" || stock
-note "rcS started, fast order"
+load "rcS started, fast order"
+# With /etc/dsboot/trace there, more is written down: see the launch below, and Weston
+# reports how long the dynamic loader took to start it.
+trace=
+if [ -f "$state/trace" ] && [ -f "$state/trace.sh" ]; then
+	trace=1
+fi
 
 first="S00mountall.sh S01log-guardian.sh S01seedrng S01syslogd S02klogd S02sysctl S05async-commit.sh S10udev S30dbus S49weston"
 # The vendor launch script switches Wi-Fi and Bluetooth off through these, so they have to
@@ -63,7 +81,12 @@ first="S00mountall.sh S01log-guardian.sh S01seedrng S01syslogd S02klogd S02sysct
 radio="S36wifibt-init.sh S40bluetoothd S45network-manager"
 
 for s in $first; do
+	if [ $s = S49weston ]; then
+		load "before the screen"
+		[ -z "$trace" ] || export LD_DEBUG=statistics
+	fi
 	run "$d/$s"
+	unset LD_DEBUG
 done
 (
 	for s in $radio; do
@@ -73,8 +96,19 @@ done
 radio_pid=$!
 run "$d/S50pulseaudio"
 wait $radio_pid
-note "radios and sound up"
+load "radios and sound up"
+# The vendor launch script looks for Weston's socket every half second. Waiting for it here,
+# in small steps, means it is found at the first look.
+n=0
+while [ ! -S /var/run/wayland-0 ] && [ $n -lt 60 ]; do
+	sleep 0.05
+	n=$((n + 1))
+done
+load "screen up"
+# When tracing, the launch script and autostart log each command they run.
+[ -z "$trace" ] || export BASH_ENV="$state/trace.sh"
 run "$d/S60launch"
+unset BASH_ENV
 
 (
 	n=0
@@ -99,3 +133,4 @@ for i in "$d"/S??*; do
 	esac
 	run "$i"
 done
+load "all started"

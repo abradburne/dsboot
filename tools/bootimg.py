@@ -12,9 +12,15 @@ the header's size. The header's RSA signature is left as it is and no longer mat
 
   bootimg.py extract STOCK.IMG boot-stock.img
   bootimg.py build boot-stock.img out.img [--logo PIC] [--kernel-logo PIC] [--gzip-kernel]
+                                           [--sd-clock HZ]
   bootimg.py check some.img
 
 Pictures can be anything ImageMagick reads; they are fitted inside the stock size on black.
+
+--sd-clock changes the fastest clock the kernel may run the OS card's slot at. Stock is
+50000000, which holds a card to about 20 MB/s whatever it is capable of; the slot for the
+second card is set to 150000000. The device tree is stored twice, in the FIT and in the
+resource block, and both copies are changed.
 """
 
 import argparse
@@ -28,6 +34,8 @@ BOOT_SECTOR = 32768
 BOOT_BYTES = 64 << 20
 SECTOR = 512
 PICTURES = {"logo": "logo.bmp", "kernel_logo": "logo_kernel.bmp"}
+# The slot the OS card sits in.
+SD_CLOCK = "/mmc@fe2b0000:max-frequency"
 
 
 def die(why):
@@ -150,6 +158,17 @@ def build(args):
     for option, name in PICTURES.items():
         if getattr(args, option):
             repaint(resource, name, getattr(args, option))
+    if args.sd_clock:
+        at, offset, size = entries(resource)["rk-kernel.dtb"]
+        if fit.data("fdt") != resource[offset:offset + size]:
+            die("the two copies of the device tree differ")
+        tree = Fit(fit.data("fdt"))
+        tree.put(SD_CLOCK, args.sd_clock.to_bytes(4, "big"))
+        fdt_at = fit.number("/images/fdt:data-position")
+        fit.image[fdt_at:fdt_at + size] = tree.image
+        fit.put("/images/fdt/hash:value", hashlib.sha256(tree.image).digest())
+        resource[offset:offset + size] = tree.image
+        resource[at + 224:at + 244] = hashlib.sha1(tree.image).digest()
     check_resource(resource)
 
     kernel = fit.data("kernel")
@@ -188,7 +207,9 @@ def report(file):
     check_resource(fit.data("resource"))
     size = fit.size()
     kind = fit.get("/images/kernel:compression").rstrip(b"\0").decode()
-    print(f"{file}: {size} bytes, kernel {fit.number('/images/kernel:data-size')} bytes ({kind}), hashes agree")
+    clock = Fit(fit.data("fdt")).number(SD_CLOCK)
+    print(f"{file}: {size} bytes, kernel {fit.number('/images/kernel:data-size')} bytes ({kind}), "
+          f"OS card clock {clock // 1000000} MHz, hashes agree")
     print(f"{size} {hashlib.sha256(image[:size]).hexdigest()}")
 
 
@@ -215,6 +236,7 @@ def main():
     one.add_argument("--logo")
     one.add_argument("--kernel-logo")
     one.add_argument("--gzip-kernel", action="store_true")
+    one.add_argument("--sd-clock", type=int)
     one = commands.add_parser("check")
     one.add_argument("image")
     args = parser.parse_args()

@@ -7,6 +7,36 @@ src="$(cd "$(dirname "$0")" && pwd)/dsboot"
 state=/etc/dsboot
 loadapp=/mnt/vendor/ctrl/loadapp.sh
 
+# The stock fstab names the four system partitions by label, and init spends about a second
+# looking the labels up before anything else starts. This writes the same fstab with each
+# label replaced by the device it is mounted from now. Nothing is changed unless every one
+# of them checks out.
+fast_fstab() {
+	[ -f "$state/stock/fstab" ] || return 1
+	: > /etc/fstab.dsboot
+	while IFS= read -r line; do
+		case "$line" in
+			PARTLABEL=*)
+				set -- $line
+				label=${1#PARTLABEL=}
+				dev=$(awk -v at="$2" '$2 == at { print $1 }' /proc/mounts | tail -n 1)
+				case "$dev" in
+					/dev/mmcblk[0-9]p[0-9]*) ;;
+					*) echo "fstab: $2 is mounted from '$dev'"; return 1 ;;
+				esac
+				grep -q "^PARTNAME=$label\$" "/sys/class/block/${dev#/dev/}/uevent" || { echo "fstab: $dev is not $label"; return 1; }
+				shift
+				echo "$dev	$*" >> /etc/fstab.dsboot
+				;;
+			*)
+				echo "$line" >> /etc/fstab.dsboot
+				;;
+		esac
+	done < "$state/stock/fstab"
+	[ "$(grep -c '^/dev/mmcblk' /etc/fstab.dsboot)" = 4 ] || { echo "fstab: expected four partitions"; return 1; }
+	mv /etc/fstab.dsboot /etc/fstab
+}
+
 install() {
 	date
 	echo "firmware: $(tr '\n' ' ' < /mnt/vendor/oem/version.ini 2>&1)"
@@ -27,6 +57,9 @@ install() {
 		cp -p "$loadapp" "$state/stock/loadapp.sh" || return 1
 	fi
 	chmod 755 "$state/stock/rcS"
+	if [ ! -f "$state/stock/fstab" ] && grep -q '^PARTLABEL=' /etc/fstab; then
+		cp -p /etc/fstab "$state/stock/fstab" || return 1
+	fi
 
 	cp "$src/rcS" /etc/init.d/rcS.dsboot && chmod 755 /etc/init.d/rcS.dsboot &&
 		mv /etc/init.d/rcS.dsboot /etc/init.d/rcS || return 1
@@ -44,6 +77,21 @@ install() {
 
 	# An earlier version set a Weston option here that turned out to change nothing.
 	rm -f /etc/profile.d/dsboot.sh
+
+	if fast_fstab; then
+		echo "fstab: partitions named by device"
+	else
+		rm -f /etc/fstab.dsboot
+		echo "fstab: left alone"
+	fi
+
+	# Tracing of the vendor launch script: on while a file called trace sits beside rcS on the card.
+	cp "$src/trace.sh" "$state/trace.sh"
+	if [ -f "$src/trace" ]; then
+		: > "$state/trace"
+	else
+		rm -f "$state/trace"
+	fi
 
 	rm -f "$state/booting"
 	: > "$state/enabled"

@@ -11,5 +11,6 @@ pictures=(--logo art/logo.png --kernel-logo art/logo_kernel.png)
 	python3 tools/bootimg.py check work/boot-stock.img | sed -n 's/^\([0-9]* [0-9a-f]*\)$/boot-stock.img \1/p'
 	python3 tools/bootimg.py build work/boot-stock.img "$out/boot-logo.img" "${pictures[@]}" | sed -n 's/^\([0-9]* [0-9a-f]*\)$/boot-logo.img \1/p'
 	python3 tools/bootimg.py build work/boot-stock.img "$out/boot-fast.img" "${pictures[@]}" --gzip-kernel | sed -n 's/^\([0-9]* [0-9a-f]*\)$/boot-fast.img \1/p'
+	python3 tools/bootimg.py build work/boot-stock.img "$out/boot-sdfast.img" "${pictures[@]}" --gzip-kernel --sd-clock 150000000 | sed -n 's/^\([0-9]* [0-9a-f]*\)$/boot-sdfast.img \1/p'
 } > "$out/boot-images.txt"
 cat "$out/boot-images.txt"

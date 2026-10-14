@@ -52,10 +52,21 @@ processes() {
 	processes
 } > "$out/report.txt" 2>&1
 
-for f in /var/log/messages /var/log/mount-all.log /var/log/weston.log /tmp/dsboot.log; do
+for f in /var/log/messages /var/log/mount-all.log /var/log/weston.log /tmp/dsboot.log /tmp/loadapp.trace; do
 	[ -f "$f" ] && cp "$f" "$out/"
 done
+# How much of each file a running program has actually pulled in from the card.
+touched() {
+	awk '/^[0-9a-f]+-[0-9a-f]+ / { f = $6 } /^Rss:/ && f ~ /^\// { kb[f] += $2 }
+		END { for (f in kb) printf "%7d kB %s\n", kb[f], f }' "/proc/$1/smaps" 2> /dev/null | sort -rn | head -n 25
+}
+
 {
+	for name in weston pulseaudio NetworkManager; do
+		for pid in $(pgrep -x "$name"); do
+			echo "== files in memory for $name ($pid)"; touched "$pid"
+		done
+	done
 	echo "== mounts"; cat /proc/mounts
 	echo "== modules"; lsmod
 	echo "== memory"; free
